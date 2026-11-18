@@ -1,0 +1,17 @@
+# Usar una imagen oficial de Python
+FROM python:3.10
+
+# Establecer el directorio de trabajo
+WORKDIR /app
+
+# Copiar todos los archivos del backend al contenedor
+COPY . /app
+
+# Instalar todas las librerías necesarias con la versión exacta de bcrypt
+RUN pip install --no-cache-dir fastapi uvicorn psycopg2-binary influxdb-client pyjwt pydantic passlib bcrypt==3.2.2
+
+# Exponer el puerto de FastAPI
+EXPOSE 8000
+
+# Comando para encender el servidor
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
