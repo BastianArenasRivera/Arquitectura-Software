@@ -15,7 +15,7 @@ SECRET_KEY = "clave_secreta_jwt"
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def get_postgres_db():
-    return psycopg2.connect(dbname="puertodb", user="admin", password="adminpassword", host="127.0.0.1", port="5433") # Cambia el puerto si usas el 5433
+    return psycopg2.connect(dbname="puertodb", user="admin", password="adminpassword", host="puerto_postgres", port="5432")
 
 def init_db():
     conn = get_postgres_db()

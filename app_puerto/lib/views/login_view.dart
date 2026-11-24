@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dashboard_view.dart';
 import 'tablet_view.dart';
+import '../config/api_config.dart';
 
 class LoginView extends StatefulWidget {
   final String rolDestino;
@@ -32,7 +33,7 @@ class _LoginViewState extends State<LoginView> {
 
     try {
       final res = await http.post(
-        Uri.parse('http://127.0.0.1:8000/api/login'),
+        Uri.parse('${ApiConfig.baseUrl}/api/login'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({"usuario": u, "password": p}),
       );
