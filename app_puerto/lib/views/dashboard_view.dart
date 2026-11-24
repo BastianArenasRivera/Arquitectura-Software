@@ -14,7 +14,7 @@ class DashboardAdminView extends StatefulWidget {
 class _DashboardAdminViewState extends State<DashboardAdminView> {
   final ScrollController _scrollController = ScrollController();
 
-  List> alertas = [
+  List alertas = [
     {
       "texto": "Camión ABDC-12 asignado a B-4",
       "color": Colors.blue[100],
@@ -35,7 +35,7 @@ class _DashboardAdminViewState extends State<DashboardAdminView> {
     super.initState();
     _timer = Timer.periodic(const Duration(seconds: 8), (timer) {
       if (!mounted) return;
-      List> nuevosEventos = [
+      List nuevosEventos = [
         {
           "texto": "Grúa requiere mantenimiento preventivo",
           "color": Colors.orange[100],

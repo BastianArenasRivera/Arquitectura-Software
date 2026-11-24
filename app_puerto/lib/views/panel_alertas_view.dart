@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 
 class PanelAlertasView extends StatefulWidget {
-  final List> alertasPatio;
+  final List alertasPatio;
   const PanelAlertasView({super.key, this.alertasPatio = const []});
 
   @override
@@ -14,8 +14,8 @@ class PanelAlertasView extends StatefulWidget {
 class _PanelAlertasViewState extends State<PanelAlertasView> {
   int _anioSeleccionado = DateTime.now().year;
   List<int> _aniosDisponibles = [2026, 2025, 2024];
-  List> _datosMensuales = [];
-  List> _reportesDispositivos = [];
+  List _datosMensuales = [];
+  List _reportesDispositivos = [];
   bool _cargando = true;
 
   final List<String> _nombresMeses = const [

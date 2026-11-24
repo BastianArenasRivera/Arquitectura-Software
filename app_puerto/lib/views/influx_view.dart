@@ -20,7 +20,7 @@ class _InfluxDataViewState extends State<InfluxDataView> {
   String _dispositivoFiltro = 'Todos';
   String _estadoFiltro = 'Todos';
 
-  late List> _registrosHistoricos;
+  late List _registrosHistoricos;
   Set<String> _reportadosIds = {};
 
   final List<String> _dispositivos = const [
@@ -239,7 +239,7 @@ class _InfluxDataViewState extends State<InfluxDataView> {
     );
   }
 
-  List> get _registrosFiltrados {
+  List get _registrosFiltrados {
     return _registrosHistoricos.where((reg) {
       // 1. Filtro de dispositivo
       if (_dispositivoFiltro != 'Todos' && reg['dispositivo'] != _dispositivoFiltro) {
