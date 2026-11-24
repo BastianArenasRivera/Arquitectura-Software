@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 
 class PanelAlertasView extends StatefulWidget {
-  final List> alertasPatio;
+  final List alertasPatio;
   const PanelAlertasView({super.key, this.alertasPatio = const []});
   @override
   State<PanelAlertasView> createState() => _PanelAlertasViewState();
@@ -16,8 +16,8 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
 
   int _anioSeleccionado = DateTime.now().year;
   List<int> _aniosDisponibles = [2026, 2025, 2024];
-  List> _datosMensuales = [];
-  List> _reportesDispositivos = [];
+  List _datosMensuales = [];
+  List _reportesDispositivos = [];
   bool _cargando = true;
 
   final List<String> _nombresMeses = const [
@@ -53,14 +53,14 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
             .toList();
         _aniosDisponibles = {...anios, 2026, 2025, 2024}.toList()
           ..sort((a, b) => b.compareTo(a));
-        _datosMensuales = List>.from(data['meses']);
+        _datosMensuales = List.from(data['meses']);
       }
 
       final resReportes = await http.get(
         Uri.parse('${ApiConfig.baseUrl}/api/reportes-dispositivos'),
       );
       if (resReportes.statusCode == 200) {
-        _reportesDispositivos = List>.from(
+        _reportesDispositivos = List.from(
           jsonDecode(resReportes.body),
         );
       }

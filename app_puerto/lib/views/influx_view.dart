@@ -18,7 +18,7 @@ class _InfluxDataViewState extends State<InfluxDataView> {
   String _dispositivoFiltro = 'Todos';
   String _estadoFiltro = 'Todos';
 
-  late List> _registrosHistoricos;
+  late List _registrosHistoricos;
   Set<String> _reportadosIds = {};
 
   final List<String> _dispositivos = const [
@@ -54,7 +54,7 @@ class _InfluxDataViewState extends State<InfluxDataView> {
     final DateTime inicioBase = DateTime(2024, 1, 2, 8, 0);
     final DateTime limiteActual = DateTime.now();
 
-    final List> generados = [];
+    final List generados = [];
 
     for (int index = 0; index < 360; index++) {
       final DateTime fecha = inicioBase.add(
@@ -258,7 +258,7 @@ class _InfluxDataViewState extends State<InfluxDataView> {
     }
   }
 
-  List> get _registrosFiltrados {
+  List get _registrosFiltrados {
     return _registrosHistoricos.where((reg) {
       if (_dispositivoFiltro != 'Todos' && reg['dispositivo'] != _dispositivoFiltro) {
         return false;
