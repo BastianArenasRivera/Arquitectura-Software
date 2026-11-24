@@ -78,12 +78,42 @@ def crear_tabla_reportes(conn):
                 dispositivo VARCHAR(100) NOT NULL,
                 metrica VARCHAR(100) NOT NULL,
                 valor VARCHAR(50) NOT NULL,
-                severidad VARCHAR(20) NOT NULL, -- 'grave' o 'leve'
+                severidad VARCHAR(20) NOT NULL,
                 descripcion TEXT,
                 fecha_registro TIMESTAMP NOT NULL,
                 fecha_reporte TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
+        muestras = [
+            ("SEED-2024-02-1", "Antena_RFID_Norte", "tag_leido", "ERROR_LECTURA_RFID", "grave", "Falla lectura pórtico", "2024-02-14 09:20:00"),
+            ("SEED-2024-02-2", "Sensor_Temp_Reefer", "temperatura_c", "-5 °C", "leve", "Variación térmica", "2024-02-21 15:10:00"),
+            ("SEED-2024-05-1", "Telemetria_Grua_04", "rpm_motor", "2080 RPM", "grave", "Sobre-revolución motor", "2024-05-11 11:45:00"),
+            ("SEED-2024-08-1", "Camara_IP_Acceso", "ancho_banda_mbps", "14 Mbps", "leve", "Caída de ancho de banda", "2024-08-19 16:30:00"),
+            ("SEED-2024-11-1", "Sensor_Temp_Reefer", "temperatura_c", "+4 °C", "grave", "Ruptura cadena de frío", "2024-11-08 07:50:00"),
+            ("SEED-2024-11-2", "Antena_RFID_Norte", "tag_leido", "SEÑAL_DEBIL_TAG", "leve", "Atenuación RFID", "2024-11-23 18:15:00"),
+            ("SEED-2025-01-1", "Telemetria_Grua_04", "rpm_motor", "1790 RPM", "leve", "Carga elevada", "2025-01-17 10:05:00"),
+            ("SEED-2025-03-1", "Camara_IP_Acceso", "ancho_banda_mbps", "4 Mbps", "grave", "Pérdida de paquetes", "2025-03-12 13:40:00"),
+            ("SEED-2025-03-2", "Sensor_Temp_Reefer", "temperatura_c", "-6 °C", "leve", "Desviación leve", "2025-03-25 09:12:00"),
+            ("SEED-2025-06-1", "Antena_RFID_Norte", "tag_leido", "ERROR_LECTURA_RFID", "grave", "Tag ilegible", "2025-06-09 14:22:00"),
+            ("SEED-2025-09-1", "Telemetria_Grua_04", "rpm_motor", "2120 RPM", "grave", "Pico de RPM", "2025-09-18 17:00:00"),
+            ("SEED-2025-09-2", "Camara_IP_Acceso", "ancho_banda_mbps", "16 Mbps", "leve", "Latencia en enlace", "2025-09-27 12:18:00"),
+            ("SEED-2025-12-1", "Sensor_Temp_Reefer", "temperatura_c", "+5 °C", "grave", "Alarma térmica contenedor", "2025-12-04 08:35:00"),
+            ("SEED-2026-01-1", "Antena_RFID_Norte", "tag_leido", "SEÑAL_DEBIL_TAG", "leve", "Interferencia en pórtico", "2026-01-15 10:40:00"),
+            ("SEED-2026-03-1", "Sensor_Temp_Reefer", "temperatura_c", "+3 °C", "grave", "Alarma temperatura Reefer", "2026-03-19 14:55:00"),
+            ("SEED-2026-03-2", "Telemetria_Grua_04", "rpm_motor", "1760 RPM", "leve", "RPM sobre umbral normal", "2026-03-28 11:10:00"),
+            ("SEED-2026-06-1", "Camara_IP_Acceso", "ancho_banda_mbps", "3 Mbps", "grave", "Enlace degradado", "2026-06-14 16:05:00"),
+            ("SEED-2026-08-1", "Antena_RFID_Norte", "tag_leido", "ERROR_LECTURA_RFID", "grave", "Fallo lector Norte", "2026-08-22 09:30:00"),
+            ("SEED-2026-08-2", "Sensor_Temp_Reefer", "temperatura_c", "-5 °C", "leve", "Fluctuación térmica", "2026-08-29 19:20:00"),
+            ("SEED-2026-10-1", "Telemetria_Grua_04", "rpm_motor", "2040 RPM", "grave", "Exceso de RPM en izaje", "2026-10-11 15:45:00"),
+            ("SEED-2026-11-1", "Camara_IP_Acceso", "ancho_banda_mbps", "15 Mbps", "leve", "Ancho de banda reducido", "2026-11-05 12:00:00"),
+        ]
+        for m in muestras:
+            cur.execute("""
+                INSERT INTO reportes_dispositivos
+                (registro_id, dispositivo, metrica, valor, severidad, descripcion, fecha_registro)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (registro_id) DO NOTHING;
+            """, m)
     conn.commit()
 
 class ReporteDispositivoIn(BaseModel):
