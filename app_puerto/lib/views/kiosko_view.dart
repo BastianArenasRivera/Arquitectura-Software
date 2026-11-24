@@ -12,7 +12,11 @@ class _KioskoLoaderViewState extends State<KioskoLoaderView> {
   void initState() {
     super.initState();
     Future.delayed(const Duration(seconds: 3), () {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const KioskoView()));
+      if (!mounted) return; // Evita error si se sale de la pantalla antes de los 3s
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const KioskoView()),
+      );
     });
   }
 
