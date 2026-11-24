@@ -371,7 +371,10 @@ class _InfluxDataViewState extends State<InfluxDataView> {
                       children: [
                         const Text(
                           'Dispositivo: ',
-                          style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0A2540)),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0A2540),
+                          ),
                         ),
                         const SizedBox(width: 6),
                         Container(
@@ -428,7 +431,10 @@ class _InfluxDataViewState extends State<InfluxDataView> {
                       children: [
                         const Text(
                           'Estado: ',
-                          style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0A2540)),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF0A2540),
+                          ),
                         ),
                         const SizedBox(width: 6),
                         Container(

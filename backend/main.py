@@ -69,6 +69,24 @@ from fastapi import HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional
 
+class PerfilAdminUpdate(BaseModel):
+    usuario: str
+    nueva_password: str
+
+@app.put("/api/admin/perfil")
+def actualizar_perfil_admin(datos: PerfilAdminUpdate):
+    conn = get_postgres_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE usuarios SET username = %s, password_hash = %s WHERE rol = 'Administrador';",
+                (datos.usuario, pwd_context.hash(datos.nueva_password)),
+            )
+        conn.commit()
+        return {"mensaje": "Perfil actualizado correctamente"}
+    finally:
+        conn.close()
+
 def crear_tabla_reportes(conn):
     with conn.cursor() as cur:
         cur.execute("""
