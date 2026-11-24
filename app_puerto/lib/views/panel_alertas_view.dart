@@ -39,15 +39,14 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
         final data = jsonDecode(resAnual.body);
         final anios = (data['anios_disponibles'] as List<dynamic>).map((e) => e as int).toList();
         _aniosDisponibles = {...anios, 2026, 2025, 2024}.toList()..sort((a, b) => b.compareTo(a));
-        _datosMensuales = (data['meses'] as List<dynamic>).cast>();
+        _datosMensuales = List.from(data['meses']);
       }
 
       final resReportes = await http.get(
         Uri.parse('${ApiConfig.baseUrl}/api/reportes-dispositivos'),
       );
       if (resReportes.statusCode == 200) {
-        _reportesDispositivos =
-            (jsonDecode(resReportes.body) as List<dynamic>).cast>();
+        _reportesDispositivos = List.from(jsonDecode(resReportes.body));
       }
     } finally {
       if (mounted) setState(() => _cargando = false);
