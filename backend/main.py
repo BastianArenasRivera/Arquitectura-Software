@@ -1,6 +1,7 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional
 import psycopg2
 from influxdb_client import InfluxDBClient, Point, WritePrecision
 from influxdb_client.client.write_api import SYNCHRONOUS
@@ -9,30 +10,78 @@ import datetime
 from passlib.context import CryptContext
 
 app = FastAPI(title="API Puerto Logístico")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 SECRET_KEY = "clave_secreta_jwt"
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 def get_postgres_db():
-    return psycopg2.connect(dbname="puertodb", user="admin", password="adminpassword", host="puerto_postgres", port="5432")
+    return psycopg2.connect(
+        dbname="puertodb",
+        user="admin",
+        password="adminpassword",
+        host="puerto_postgres",
+        port="5432",
+    )
 
 def init_db():
     conn = get_postgres_db()
     c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS accesos (id SERIAL PRIMARY KEY, patente TEXT, anden TEXT, fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''')
-    
-    # FORZAR REINICIO DE LA TABLA DE USUARIOS
-    c.execute("DROP TABLE IF EXISTS usuarios")
-    c.execute('''CREATE TABLE usuarios (id SERIAL PRIMARY KEY, username TEXT UNIQUE, password_hash TEXT, rol TEXT, nombre TEXT)''')
-    
-    # INSERTAR USUARIOS MANUALMENTE
-    c.execute("INSERT INTO usuarios (username, password_hash, rol, nombre) VALUES (%s, %s, %s, %s)", ('admin', pwd_context.hash('Admin123'), 'Administrador', 'Administrador Central'))
-    c.execute("INSERT INTO usuarios (username, password_hash, rol, nombre) VALUES (%s, %s, %s, %s)", ('joaquin', pwd_context.hash('Joaquin123'), 'Tablet', 'Joaquín Contreras'))
-    
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS accesos (
+            id SERIAL PRIMARY KEY,
+            patente TEXT,
+            anden TEXT,
+            transportista TEXT DEFAULT 'Transportes Pacífico',
+            contenedor TEXT DEFAULT 'MSKU-482910',
+            tramite TEXT DEFAULT 'Ingreso',
+            fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    c.execute("ALTER TABLE accesos ADD COLUMN IF NOT EXISTS transportista TEXT DEFAULT 'Transportes Pacífico';")
+    c.execute("ALTER TABLE accesos ADD COLUMN IF NOT EXISTS contenedor TEXT DEFAULT 'MSKU-482910';")
+    c.execute("ALTER TABLE accesos ADD COLUMN IF NOT EXISTS tramite TEXT DEFAULT 'Ingreso';")
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id SERIAL PRIMARY KEY,
+            username TEXT UNIQUE,
+            password_hash TEXT,
+            rol TEXT,
+            nombre TEXT
+        )
+    """)
+    c.execute(
+        "INSERT INTO usuarios (username, password_hash, rol, nombre) VALUES (%s, %s, %s, %s) ON CONFLICT (username) DO NOTHING",
+        ("admin", pwd_context.hash("Admin123"), "Administrador", "Administrador Central"),
+    )
+    c.execute(
+        "INSERT INTO usuarios (username, password_hash, rol, nombre) VALUES (%s, %s, %s, %s) ON CONFLICT (username) DO NOTHING",
+        ("joaquin", pwd_context.hash("Joaquin123"), "Tablet", "Joaquín Contreras"),
+    )
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS maniobras_grua (
+            id SERIAL PRIMARY KEY,
+            grua_id TEXT NOT NULL,
+            operador TEXT NOT NULL,
+            contenedor TEXT NOT NULL,
+            origen TEXT NOT NULL,
+            destino TEXT NOT NULL,
+            duracion_seg INT NOT NULL,
+            origen_sync TEXT DEFAULT 'Online',
+            fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     conn.commit()
     conn.close()
-    print("¡Usuarios creados exitosamente en PostgreSQL!")
 
 init_db()
 
@@ -43,6 +92,54 @@ class LoginModel(BaseModel):
 class RFIDModel(BaseModel):
     tag_rfid: str
 
+class AccesoCreate(BaseModel):
+    patente: str
+    anden: str
+    transportista: Optional[str] = "Transportes Pacífico"
+    contenedor: Optional[str] = "MSKU-482910"
+    tramite: Optional[str] = "Ingreso"
+
+class PerfilAdminUpdate(BaseModel):
+    usuario: str
+    nueva_password: str
+
+class ManiobraIn(BaseModel):
+    grua_id: str
+    operador: str
+    contenedor: str
+    origen: str
+    destino: str
+    duracion_seg: int
+    origen_sync: Optional[str] = "Online"
+
+class ReporteDispositivoIn(BaseModel):
+    registro_id: str
+    dispositivo: str
+    metrica: str
+    valor: str
+    severidad: str
+    descripcion: Optional[str] = ""
+    fecha_registro: str
+
+@app.get("/api/estado-sistema")
+def estado_sistema():
+    pg_ok = False
+    try:
+        conn = get_postgres_db()
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1;")
+        conn.close()
+        pg_ok = True
+    except Exception:
+        pg_ok = False
+
+    return {
+        "fastapi": True,
+        "postgres": pg_ok,
+        "influx": True,
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+    }
+
 @app.post("/api/login")
 def login(data: LoginModel):
     conn = get_postgres_db()
@@ -52,26 +149,17 @@ def login(data: LoginModel):
     conn.close()
 
     if user and pwd_context.verify(data.password, user[0]):
-        token = jwt.encode({"user": data.usuario, "rol": user[1], "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=2)}, SECRET_KEY, algorithm="HS256")
+        token = jwt.encode(
+            {
+                "user": data.usuario,
+                "rol": user[1],
+                "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=2),
+            },
+            SECRET_KEY,
+            algorithm="HS256",
+        )
         return {"token": token, "rol": user[1], "nombre": user[2]}
     raise HTTPException(status_code=401, detail="Credenciales inválidas")
-
-@app.post("/api/rfid")
-def registrar_ingreso(data: RFIDModel):
-    anden_asignado = "Andén B-4" if data.tag_rfid == "TAG-123" else "Andén C-1"
-    return {"mensaje": "Acceso Registrado", "anden": anden_asignado}
-
-@app.get("/api/historial")
-def ver_historial():
-    return [{"patente": "ABCD-12", "anden": "B-4", "fecha": "2026-10-30 10:00"}] # Simulado para mantener brevedad
-
-from fastapi import HTTPException, Query
-from pydantic import BaseModel
-from typing import Optional
-
-class PerfilAdminUpdate(BaseModel):
-    usuario: str
-    nueva_password: str
 
 @app.put("/api/admin/perfil")
 def actualizar_perfil_admin(datos: PerfilAdminUpdate):
@@ -87,6 +175,126 @@ def actualizar_perfil_admin(datos: PerfilAdminUpdate):
     finally:
         conn.close()
 
+@app.post("/api/rfid")
+def registrar_rfid(data: RFIDModel):
+    conn = get_postgres_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO accesos (patente, anden, transportista, contenedor, tramite) VALUES (%s, %s, %s, %s, %s) RETURNING id;",
+                (data.tag_rfid, "Andén B-4", "Logística Sur", "MSKU-742918", "Ingreso"),
+            )
+            nuevo_id = cur.fetchone()[0]
+        conn.commit()
+        return {"id": nuevo_id, "patente": data.tag_rfid, "anden": "Andén B-4"}
+    finally:
+        conn.close()
+
+@app.post("/api/accesos")
+def crear_acceso(acceso: AccesoCreate):
+    conn = get_postgres_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO accesos (patente, anden, transportista, contenedor, tramite)
+                VALUES (%s, %s, %s, %s, %s) RETURNING id, fecha;
+                """,
+                (acceso.patente, acceso.anden, acceso.transportista, acceso.contenedor, acceso.tramite),
+            )
+            row = cur.fetchone()
+        conn.commit()
+        return {
+            "id": row[0],
+            "patente": acceso.patente,
+            "anden": acceso.anden,
+            "transportista": acceso.transportista,
+            "contenedor": acceso.contenedor,
+            "tramite": acceso.tramite,
+            "fecha": row[1].isoformat() if row[1] else "",
+        }
+    finally:
+        conn.close()
+
+@app.get("/api/accesos")
+def listar_accesos():
+    conn = get_postgres_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, patente, anden, COALESCE(transportista, 'Logística Portuaria'),
+                       COALESCE(contenedor, 'MSKU-482910'), COALESCE(tramite, 'Ingreso'), fecha
+                FROM accesos
+                ORDER BY fecha DESC
+                LIMIT 25;
+                """
+            )
+            filas = cur.fetchall()
+        return [
+            {
+                "id": f[0],
+                "patente": f[1],
+                "anden": f[2],
+                "transportista": f[3],
+                "contenedor": f[4],
+                "tramite": f[5],
+                "fecha": f[6].strftime("%H:%M:%S") if f[6] else "",
+            }
+            for f in filas
+        ]
+    finally:
+        conn.close()
+
+@app.post("/api/maniobras")
+def registrar_maniobra(m: ManiobraIn):
+    conn = get_postgres_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO maniobras_grua (grua_id, operador, contenedor, origen, destino, duracion_seg, origen_sync)
+                VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id;
+                """,
+                (m.grua_id, m.operador, m.contenedor, m.origen, m.destino, m.duracion_seg, m.origen_sync),
+            )
+            nuevo_id = cur.fetchone()[0]
+        conn.commit()
+        return {"id": nuevo_id, "mensaje": "Maniobra registrada"}
+    finally:
+        conn.close()
+
+@app.get("/api/maniobras")
+def listar_maniobras():
+    conn = get_postgres_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, grua_id, operador, contenedor, origen, destino, duracion_seg, origen_sync, fecha
+                FROM maniobras_grua
+                ORDER BY fecha DESC
+                LIMIT 20;
+                """
+            )
+            filas = cur.fetchall()
+        return [
+            {
+                "id": f[0],
+                "grua_id": f[1],
+                "operador": f[2],
+                "contenedor": f[3],
+                "origen": f[4],
+                "destino": f[5],
+                "duracion_seg": f[6],
+                "origen_sync": f[7],
+                "fecha": f[8].strftime("%Y-%m-%d %H:%M:%S") if f[8] else "",
+            }
+            for f in filas
+        ]
+    finally:
+        conn.close()
+
 def crear_tabla_reportes(conn):
     with conn.cursor() as cur:
         cur.execute("""
@@ -98,10 +306,12 @@ def crear_tabla_reportes(conn):
                 valor VARCHAR(50) NOT NULL,
                 severidad VARCHAR(20) NOT NULL,
                 descripcion TEXT,
+                estado VARCHAR(20) DEFAULT 'pendiente',
                 fecha_registro TIMESTAMP NOT NULL,
                 fecha_reporte TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
+        cur.execute("ALTER TABLE reportes_dispositivos ADD COLUMN IF NOT EXISTS estado VARCHAR(20) DEFAULT 'pendiente';")
         muestras = [
             ("SEED-2024-02-1", "Antena_RFID_Norte", "tag_leido", "ERROR_LECTURA_RFID", "grave", "Falla lectura pórtico", "2024-02-14 09:20:00"),
             ("SEED-2024-02-2", "Sensor_Temp_Reefer", "temperatura_c", "-5 °C", "leve", "Variación térmica", "2024-02-21 15:10:00"),
@@ -134,15 +344,6 @@ def crear_tabla_reportes(conn):
             """, m)
     conn.commit()
 
-class ReporteDispositivoIn(BaseModel):
-    registro_id: str
-    dispositivo: str
-    metrica: str
-    valor: str
-    severidad: str  
-    descripcion: Optional[str] = ""
-    fecha_registro: str
-
 @app.post("/api/reportes-dispositivos")
 def crear_reporte_dispositivo(reporte: ReporteDispositivoIn):
     conn = get_postgres_db()
@@ -151,35 +352,53 @@ def crear_reporte_dispositivo(reporte: ReporteDispositivoIn):
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT id FROM reportes_dispositivos WHERE registro_id = %s",
-                (reporte.registro_id,)
+                (reporte.registro_id,),
             )
             if cur.fetchone():
                 return {
                     "ya_reportado": True,
-                    "mensaje": "El problema ya ha sido reportado"
+                    "mensaje": "El problema ya ha sido reportado",
                 }
 
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO reportes_dispositivos
                 (registro_id, dispositivo, metrica, valor, severidad, descripcion, fecha_registro)
                 VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING id;
-            """, (
-                reporte.registro_id,
-                reporte.dispositivo,
-                reporte.metrica,
-                reporte.valor,
-                reporte.severidad,
-                reporte.descripcion,
-                reporte.fecha_registro
-            ))
+                """,
+                (
+                    reporte.registro_id,
+                    reporte.dispositivo,
+                    reporte.metrica,
+                    reporte.valor,
+                    reporte.severidad,
+                    reporte.descripcion,
+                    reporte.fecha_registro,
+                ),
+            )
             nuevo_id = cur.fetchone()[0]
         conn.commit()
         return {
             "ya_reportado": False,
             "id": nuevo_id,
-            "mensaje": "Reporte agregado al Panel de Alertas"
+            "mensaje": "Reporte agregado al Panel de Alertas",
         }
+    finally:
+        conn.close()
+
+@app.put("/api/reportes-dispositivos/{reporte_id}/resolver")
+def resolver_reporte_dispositivo(reporte_id: int):
+    conn = get_postgres_db()
+    try:
+        crear_tabla_reportes(conn)
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE reportes_dispositivos SET estado = 'resuelto' WHERE id = %s;",
+                (reporte_id,),
+            )
+        conn.commit()
+        return {"mensaje": "Reporte marcado como resuelto"}
     finally:
         conn.close()
 
@@ -191,7 +410,7 @@ def listar_reportes_dispositivos():
         with conn.cursor() as cur:
             cur.execute("""
                 SELECT id, registro_id, dispositivo, metrica, valor, severidad,
-                       descripcion, fecha_registro, fecha_reporte
+                       descripcion, COALESCE(estado, 'pendiente'), fecha_registro, fecha_reporte
                 FROM reportes_dispositivos
                 ORDER BY fecha_reporte DESC;
             """)
@@ -205,8 +424,9 @@ def listar_reportes_dispositivos():
                 "valor": f[4],
                 "severidad": f[5],
                 "descripcion": f[6],
-                "fecha_registro": f[7].isoformat() if f[7] else "",
-                "fecha_reporte": f[8].isoformat() if f[8] else "",
+                "estado": f[7],
+                "fecha_registro": f[8].isoformat() if f[8] else "",
+                "fecha_reporte": f[9].isoformat() if f[9] else "",
             }
             for f in filas
         ]
@@ -228,7 +448,8 @@ def resumen_anual_reportes(anio: int = Query(default=2026)):
             if anio not in anios_disponibles:
                 anios_disponibles.insert(0, anio)
 
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT
                     EXTRACT(MONTH FROM fecha_registro)::int AS mes,
                     SUM(CASE WHEN severidad = 'grave' THEN 1 ELSE 0 END) AS graves,
@@ -237,23 +458,27 @@ def resumen_anual_reportes(anio: int = Query(default=2026)):
                 WHERE EXTRACT(YEAR FROM fecha_registro)::int = %s
                 GROUP BY mes
                 ORDER BY mes;
-            """, (anio,))
+                """,
+                (anio,),
+            )
             resultados = {r[0]: {"graves": r[1], "leves": r[2]} for r in cur.fetchall()}
 
         meses = []
         for m in range(1, 13):
             datos = resultados.get(m, {"graves": 0, "leves": 0})
-            meses.append({
-                "mes": m,
-                "graves": datos["graves"],
-                "leves": datos["leves"],
-                "total": datos["graves"] + datos["leves"]
-            })
+            meses.append(
+                {
+                    "mes": m,
+                    "graves": datos["graves"],
+                    "leves": datos["leves"],
+                    "total": datos["graves"] + datos["leves"],
+                }
+            )
 
         return {
             "anio": anio,
             "anios_disponibles": sorted(list(set(anios_disponibles)), reverse=True),
-            "meses": meses
+            "meses": meses,
         }
     finally:
         conn.close()

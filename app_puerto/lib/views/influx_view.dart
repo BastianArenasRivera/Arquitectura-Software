@@ -1,3 +1,5 @@
+// ignore: avoid_web_libraries_in_flutter, deprecated_member_use
+import 'dart:html' as html;
 import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -14,7 +16,8 @@ class _InfluxDataViewState extends State<InfluxDataView> {
   final ScrollController _verticalController = ScrollController();
   final ScrollController _horizontalController = ScrollController();
 
-  DateTimeRange? _rangoFechas;
+  DateTime? _fechaDesde;
+  DateTime? _fechaHasta;
   String _dispositivoFiltro = 'Todos';
   String _estadoFiltro = 'Todos';
 
@@ -135,7 +138,7 @@ class _InfluxDataViewState extends State<InfluxDataView> {
         Uri.parse('${ApiConfig.baseUrl}/api/reportes-dispositivos'),
       );
       if (res.statusCode == 200 && mounted) {
-        final List<dynamic> data = jsonDecode(res.body);
+        final List data = jsonDecode(res.body);
         setState(() {
           _reportadosIds = data.map((e) => e['registro_id'].toString()).toSet();
         });
@@ -143,39 +146,85 @@ class _InfluxDataViewState extends State<InfluxDataView> {
     } catch (_) {}
   }
 
-  Future<void> _seleccionarRangoTiempo() async {
-    final ahora = DateTime.now();
-    final rango = await showDateRangePicker(
-      context: context,
-      firstDate: DateTime(2024, 1, 1),
-      lastDate: ahora,
-      initialDateRange: _rangoFechas ??
-          DateTimeRange(
-            start: DateTime(ahora.year, ahora.month - 2, 1),
-            end: ahora,
-          ),
-      helpText: 'Seleccionar Rango de Tiempo Histórico',
-      cancelText: 'Cancelar',
-      confirmText: 'Filtrar',
-      saveText: 'Aplicar',
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.light().copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFF0A2540),
-              onPrimary: Colors.white,
-              surface: Colors.white,
-              onSurface: Color(0xFF0A2540),
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (rango != null) setState(() => _rangoFechas = rango);
+  String _formatearFechaCorta(DateTime? f) {
+    if (f == null) return 'Seleccionar';
+    final d = f.day.toString().padLeft(2, '0');
+    final m = f.month.toString().padLeft(2, '0');
+    return '$d/$m/${f.year}';
   }
 
-  Future<void> _reportarAnomalia(Map<String, dynamic> reg) async {
+  Future<void> _seleccionarFechaDesde() async {
+    final ahora = DateTime.now();
+    final seleccionada = await showDatePicker(
+      context: context,
+      initialDate: _fechaDesde ?? DateTime(2024, 1, 1),
+      firstDate: DateTime(2024, 1, 1),
+      lastDate: _fechaHasta ?? ahora,
+      helpText: 'Seleccionar fecha inicial (Desde)',
+      cancelText: 'Cancelar',
+      confirmText: 'Aplicar',
+      builder: (context, child) => Theme(
+        data: ThemeData.light().copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: Color(0xFF0A2540),
+            onPrimary: Colors.white,
+            surface: Colors.white,
+            onSurface: Color(0xFF0A2540),
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (seleccionada != null) {
+      setState(() => _fechaDesde = seleccionada);
+    }
+  }
+
+  Future<void> _seleccionarFechaHasta() async {
+    final ahora = DateTime.now();
+    final seleccionada = await showDatePicker(
+      context: context,
+      initialDate: _fechaHasta ?? ahora,
+      firstDate: _fechaDesde ?? DateTime(2024, 1, 1),
+      lastDate: ahora,
+      helpText: 'Seleccionar fecha final (Hasta)',
+      cancelText: 'Cancelar',
+      confirmText: 'Aplicar',
+      builder: (context, child) => Theme(
+        data: ThemeData.light().copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: Color(0xFF0A2540),
+            onPrimary: Colors.white,
+            surface: Colors.white,
+            onSurface: Color(0xFF0A2540),
+          ),
+        ),
+        child: child!,
+      ),
+    );
+    if (seleccionada != null) {
+      setState(() => _fechaHasta = seleccionada);
+    }
+  }
+
+  void _exportarCsv(List registros) {
+    final buffer = StringBuffer();
+    buffer.writeln('Timestamp,Dispositivo,Metrica,Valor,Severidad');
+    for (final reg in registros) {
+      buffer.writeln(
+        '"${reg['timestamp']}","${reg['dispositivo']}","${reg['metrica']}","${reg['valor']}","${reg['severidad']}"',
+      );
+    }
+    final bytes = utf8.encode(buffer.toString());
+    final blob = html.Blob([bytes], 'text/csv;charset=utf-8;');
+    final url = html.Url.createObjectUrlFromBlob(blob);
+    html.AnchorElement(href: url)
+      ..setAttribute('download', 'telemetria_puerto.csv')
+      ..click();
+    html.Url.revokeObjectUrl(url);
+  }
+
+  Future<void> _reportarAnomalia(Map reg) async {
     final String regId = reg['id'];
     if (_reportadosIds.contains(regId)) {
       _mostrarPopupYaReportado();
@@ -192,7 +241,8 @@ class _InfluxDataViewState extends State<InfluxDataView> {
           'metrica': reg['metrica'],
           'valor': reg['valor'],
           'severidad': reg['severidad'],
-          'descripcion': 'Anomalía (${reg['valor']}) detectada en ${reg['dispositivo']}',
+          'descripcion':
+              'Anomalía (${reg['valor']}) detectada en ${reg['dispositivo']}',
           'fecha_registro': (reg['fecha'] as DateTime).toIso8601String(),
         }),
       );
@@ -260,29 +310,39 @@ class _InfluxDataViewState extends State<InfluxDataView> {
 
   List get _registrosFiltrados {
     return _registrosHistoricos.where((reg) {
-      if (_dispositivoFiltro != 'Todos' && reg['dispositivo'] != _dispositivoFiltro) {
+      if (_dispositivoFiltro != 'Todos' &&
+          reg['dispositivo'] != _dispositivoFiltro) {
         return false;
       }
-      if (_estadoFiltro == 'Anormales' && reg['severidad'] == 'normal') return false;
-      if (_estadoFiltro == 'Graves' && reg['severidad'] != 'grave') return false;
-      if (_estadoFiltro == 'Levemente graves' && reg['severidad'] != 'leve') return false;
+      if (_estadoFiltro == 'Anormales' && reg['severidad'] == 'normal') {
+        return false;
+      }
+      if (_estadoFiltro == 'Graves' && reg['severidad'] != 'grave') {
+        return false;
+      }
+      if (_estadoFiltro == 'Levemente graves' && reg['severidad'] != 'leve') {
+        return false;
+      }
 
-      if (_rangoFechas != null) {
-        final DateTime fecha = reg['fecha'];
+      final DateTime fecha = reg['fecha'];
+      if (_fechaDesde != null) {
         final inicio = DateTime(
-          _rangoFechas!.start.year,
-          _rangoFechas!.start.month,
-          _rangoFechas!.start.day,
+          _fechaDesde!.year,
+          _fechaDesde!.month,
+          _fechaDesde!.day,
         );
+        if (fecha.isBefore(inicio)) return false;
+      }
+      if (_fechaHasta != null) {
         final fin = DateTime(
-          _rangoFechas!.end.year,
-          _rangoFechas!.end.month,
-          _rangoFechas!.end.day,
+          _fechaHasta!.year,
+          _fechaHasta!.month,
+          _fechaHasta!.day,
           23,
           59,
           59,
         );
-        if (fecha.isBefore(inicio) || fecha.isAfter(fin)) return false;
+        if (fecha.isAfter(fin)) return false;
       }
       return true;
     }).toList();
@@ -290,15 +350,18 @@ class _InfluxDataViewState extends State<InfluxDataView> {
 
   @override
   Widget build(BuildContext context) {
-    final textoRango = _rangoFechas == null
-        ? 'Seleccionar Rango de Tiempo'
-        : '${_rangoFechas!.start.day}/${_rangoFechas!.start.month}/${_rangoFechas!.start.year} - ${_rangoFechas!.end.day}/${_rangoFechas!.end.month}/${_rangoFechas!.end.year}';
     final listaVisible = _registrosFiltrados;
+    final int totalNormales =
+        listaVisible.where((r) => r['severidad'] == 'normal').length;
+    final int totalLeves =
+        listaVisible.where((r) => r['severidad'] == 'leve').length;
+    final int totalGraves =
+        listaVisible.where((r) => r['severidad'] == 'grave').length;
     final opcionesDispositivos = ['Todos', ..._dispositivos];
 
     return Theme(
       data: ThemeData.light().copyWith(
-        scaffoldBackgroundColor: const Color(0xFFF4F6F8),
+        scaffoldBackgroundColor: const Color(0xFFF1F5F9),
         appBarTheme: const AppBarTheme(
           backgroundColor: Color(0xFF0A2540),
           foregroundColor: Colors.white,
@@ -310,6 +373,21 @@ class _InfluxDataViewState extends State<InfluxDataView> {
             'Visor de Telemetría - San Antonio',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 16),
+              child: ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0284C7),
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: () => _exportarCsv(listaVisible),
+                icon: const Icon(Icons.download, size: 18),
+                label: const Text('Exportar CSV',
+                    style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+            ),
+          ],
         ),
         body: Padding(
           padding: const EdgeInsets.all(20.0),
@@ -327,12 +405,18 @@ class _InfluxDataViewState extends State<InfluxDataView> {
                       color: Color(0xFF0A2540),
                     ),
                   ),
-                  Text(
-                    'Mostrando ${listaVisible.length} registros',
-                    style: const TextStyle(
-                      color: Color(0xFF1B2A47),
-                      fontWeight: FontWeight.w600,
-                    ),
+                  Wrap(
+                    spacing: 10,
+                    children: [
+                      _buildResumenChip('Total: ${listaVisible.length}',
+                          const Color(0xFF0A2540)),
+                      _buildResumenChip(
+                          'Normales: $totalNormales', const Color(0xFF16A34A)),
+                      _buildResumenChip(
+                          'Leves: $totalLeves', const Color(0xFFD97706)),
+                      _buildResumenChip(
+                          'Graves: $totalGraves', const Color(0xFFDC2626)),
+                    ],
                   ),
                 ],
               ),
@@ -343,28 +427,83 @@ class _InfluxDataViewState extends State<InfluxDataView> {
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.grey[300]!),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
                 ),
                 child: Wrap(
-                  spacing: 18,
+                  spacing: 14,
                   runSpacing: 12,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0A2540),
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    // RECUADRO 1: DESDE
+                    InkWell(
+                      onTap: _seleccionarFechaDesde,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF0F4F8),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                              color: const Color(0xFF0A2540), width: 1.3),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.calendar_today,
+                                size: 17, color: Color(0xFF0284C7)),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Desde: ${_formatearFechaCorta(_fechaDesde)}',
+                              style: const TextStyle(
+                                color: Color(0xFF0A2540),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      onPressed: _seleccionarRangoTiempo,
-                      icon: const Icon(Icons.date_range),
-                      label: Text(textoRango),
                     ),
-                    if (_rangoFechas != null)
+                    // RECUADRO 2: HASTA
+                    InkWell(
+                      onTap: _seleccionarFechaHasta,
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF0F4F8),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                              color: const Color(0xFF0A2540), width: 1.3),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.event,
+                                size: 17, color: Color(0xFF0284C7)),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Hasta: ${_formatearFechaCorta(_fechaHasta)}',
+                              style: const TextStyle(
+                                color: Color(0xFF0A2540),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (_fechaDesde != null || _fechaHasta != null)
                       TextButton.icon(
-                        onPressed: () => setState(() => _rangoFechas = null),
-                        icon: const Icon(Icons.clear, color: Colors.red),
-                        label: const Text('Quitar rango', style: TextStyle(color: Colors.red)),
+                        onPressed: () => setState(() {
+                          _fechaDesde = null;
+                          _fechaHasta = null;
+                        }),
+                        icon: const Icon(Icons.clear,
+                            color: Color(0xFFDC2626), size: 18),
+                        label: const Text('Limpiar fechas',
+                            style: TextStyle(color: Color(0xFFDC2626))),
                       ),
                     Row(
                       mainAxisSize: MainAxisSize.min,
@@ -382,7 +521,8 @@ class _InfluxDataViewState extends State<InfluxDataView> {
                           decoration: BoxDecoration(
                             color: const Color(0xFFF0F4F8),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFF0A2540), width: 1.3),
+                            border: Border.all(
+                                color: const Color(0xFF0A2540), width: 1.3),
                           ),
                           child: DropdownButtonHideUnderline(
                             child: DropdownButton<String>(
@@ -390,20 +530,21 @@ class _InfluxDataViewState extends State<InfluxDataView> {
                               dropdownColor: const Color(0xFF0A2540),
                               borderRadius: BorderRadius.circular(10),
                               iconEnabledColor: const Color(0xFF0A2540),
-                              selectedItemBuilder: (context) => opcionesDispositivos
-                                  .map(
-                                    (d) => Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(
-                                        d,
-                                        style: const TextStyle(
-                                          color: Color(0xFF0A2540),
-                                          fontWeight: FontWeight.w600,
+                              selectedItemBuilder: (context) =>
+                                  opcionesDispositivos
+                                      .map(
+                                        (d) => Align(
+                                          alignment: Alignment.centerLeft,
+                                          child: Text(
+                                            d,
+                                            style: const TextStyle(
+                                              color: Color(0xFF0A2540),
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
                                         ),
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
+                                      )
+                                      .toList(),
                               items: opcionesDispositivos
                                   .map(
                                     (d) => DropdownMenuItem<String>(
@@ -419,7 +560,9 @@ class _InfluxDataViewState extends State<InfluxDataView> {
                                   )
                                   .toList(),
                               onChanged: (val) {
-                                if (val != null) setState(() => _dispositivoFiltro = val);
+                                if (val != null) {
+                                  setState(() => _dispositivoFiltro = val);
+                                }
                               },
                             ),
                           ),
@@ -442,7 +585,8 @@ class _InfluxDataViewState extends State<InfluxDataView> {
                           decoration: BoxDecoration(
                             color: const Color(0xFFF0F4F8),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFF0A2540), width: 1.3),
+                            border: Border.all(
+                                color: const Color(0xFF0A2540), width: 1.3),
                           ),
                           child: DropdownButtonHideUnderline(
                             child: DropdownButton<String>(
@@ -479,7 +623,9 @@ class _InfluxDataViewState extends State<InfluxDataView> {
                                   )
                                   .toList(),
                               onChanged: (val) {
-                                if (val != null) setState(() => _estadoFiltro = val);
+                                if (val != null) {
+                                  setState(() => _estadoFiltro = val);
+                                }
                               },
                             ),
                           ),
@@ -496,8 +642,9 @@ class _InfluxDataViewState extends State<InfluxDataView> {
                   clipBehavior: Clip.antiAlias,
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    border: Border.all(color: Colors.grey[400]!, width: 1.5),
-                    borderRadius: BorderRadius.circular(8),
+                    border:
+                        Border.all(color: const Color(0xFFCBD5E1), width: 1.5),
+                    borderRadius: BorderRadius.circular(10),
                   ),
                   child: LayoutBuilder(
                     builder: (context, constraints) {
@@ -521,10 +668,11 @@ class _InfluxDataViewState extends State<InfluxDataView> {
                               controller: _horizontalController,
                               scrollDirection: Axis.horizontal,
                               child: ConstrainedBox(
-                                constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                                constraints: BoxConstraints(
+                                    minWidth: constraints.maxWidth),
                                 child: DataTable(
                                   headingRowColor: WidgetStateProperty.all(
-                                    const Color(0xFFE6ECF2),
+                                    const Color(0xFFE2E8F0),
                                   ),
                                   columns: const [
                                     DataColumn(
@@ -570,7 +718,8 @@ class _InfluxDataViewState extends State<InfluxDataView> {
                                   ],
                                   rows: listaVisible.map((reg) {
                                     final String severidad = reg['severidad'];
-                                    final bool yaReportado = _reportadosIds.contains(reg['id']);
+                                    final bool yaReportado =
+                                        _reportadosIds.contains(reg['id']);
                                     final bool esGrave = severidad == 'grave';
                                     final bool esLeve = severidad == 'leve';
 
@@ -613,13 +762,15 @@ class _InfluxDataViewState extends State<InfluxDataView> {
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 15,
                                                   color: esGrave
-                                                      ? Colors.red[800]
+                                                      ? const Color(0xFFDC2626)
                                                       : esLeve
-                                                          ? Colors.amber[900]
+                                                          ? const Color(
+                                                              0xFFD97706)
                                                           : Colors.black,
                                                 ),
                                               ),
-                                              if ((esGrave || esLeve) && !yaReportado) ...[
+                                              if ((esGrave || esLeve) &&
+                                                  !yaReportado) ...[
                                                 const SizedBox(width: 8),
                                                 IconButton(
                                                   tooltip: esGrave
@@ -628,11 +779,14 @@ class _InfluxDataViewState extends State<InfluxDataView> {
                                                   icon: Icon(
                                                     Icons.warning_rounded,
                                                     color: esGrave
-                                                        ? Colors.red
-                                                        : Colors.amber[700],
+                                                        ? const Color(
+                                                            0xFFDC2626)
+                                                        : const Color(
+                                                            0xFFD97706),
                                                     size: 24,
                                                   ),
-                                                  onPressed: () => _reportarAnomalia(reg),
+                                                  onPressed: () =>
+                                                      _reportarAnomalia(reg),
                                                 ),
                                               ],
                                             ],
@@ -653,6 +807,25 @@ class _InfluxDataViewState extends State<InfluxDataView> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResumenChip(String texto, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Text(
+        texto,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.bold,
+          fontSize: 12,
         ),
       ),
     );

@@ -1,9 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'dart:convert';
+import '../config/api_config.dart';
 import 'dashboard_view.dart';
 import 'tablet_view.dart';
-import '../config/api_config.dart';
 
 class LoginView extends StatefulWidget {
   final String rolDestino;
@@ -14,10 +14,21 @@ class LoginView extends StatefulWidget {
 }
 
 class _LoginViewState extends State<LoginView> {
-  final _userCtrl = TextEditingController();
-  final _passCtrl = TextEditingController();
+  final TextEditingController _userCtrl = TextEditingController();
+  final TextEditingController _passCtrl = TextEditingController();
   bool _ocultarClave = true;
   bool _cargando = false;
+  String? _errorMensaje;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.rolDestino == 'Administrador') {
+      _userCtrl.text = 'admin';
+    } else {
+      _userCtrl.text = 'joaquin';
+    }
+  }
 
   @override
   void dispose() {
@@ -26,64 +37,51 @@ class _LoginViewState extends State<LoginView> {
     super.dispose();
   }
 
-  Future<void> _ingresar() async {
-    if (_cargando) return;
-
-    String u = _userCtrl.text.trim();
-    String p = _passCtrl.text;
-
-    if (u.isEmpty || p.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Error: Completa todos los campos"), backgroundColor: Colors.red),
-      );
-      return;
-    }
-
-    if (!RegExp(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$').hasMatch(p)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("La clave debe tener 1 mayúscula, 1 minúscula y 1 número."),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    setState(() => _cargando = true);
+  Future<void> _iniciarSesion() async {
+    setState(() {
+      _cargando = true;
+      _errorMensaje = null;
+    });
 
     try {
-      final res = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}/api/login'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({"usuario": u, "password": p}),
-      );
-
-      if (!mounted) return;
+      final res = await http
+          .post(
+            Uri.parse('${ApiConfig.baseUrl}/api/login'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'usuario': _userCtrl.text.trim(),
+              'password': _passCtrl.text,
+            }),
+          )
+          .timeout(const Duration(seconds: 5));
 
       if (res.statusCode == 200) {
-        var data = jsonDecode(res.body);
-        if (data['rol'] == 'Administrador' && widget.rolDestino == 'Administrador') {
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const DashboardAdminView()));
-        } else if (data['rol'] == 'Tablet' && widget.rolDestino == 'Tablet') {
-          Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => TabletGruaView(nombre: data['nombre'])));
+        final data = jsonDecode(res.body);
+        if (!mounted) return;
+        if (widget.rolDestino == 'Administrador') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const DashboardAdminView()),
+          );
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Usuario no autorizado para esta vista"), backgroundColor: Colors.red),
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => TabletGruaView(
+                nombreOperador: data['nombre'] ?? 'Joaquín Contreras',
+              ),
+            ),
           );
         }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Credenciales incorrectas"), backgroundColor: Colors.red),
-        );
+        setState(() {
+          _errorMensaje = 'Usuario o contraseña incorrectos.';
+        });
       }
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Error de servidor: Verifica que FastAPI esté encendido"),
-          backgroundColor: Colors.red,
-        ),
-      );
+      setState(() {
+        _errorMensaje = 'No se pudo conectar con FastAPI. Verifica el servidor.';
+      });
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
@@ -91,135 +89,177 @@ class _LoginViewState extends State<LoginView> {
 
   @override
   Widget build(BuildContext context) {
-    bool isAdmin = widget.rolDestino == 'Administrador';
-
-    Color bgColor = isAdmin ? const Color(0xFF0A2540) : const Color(0xFF121212);
-    Color cardColor = isAdmin ? const Color(0xFF103254) : const Color(0xFF1E1E1E);
-    Color appBarColor = isAdmin ? const Color(0xFF061A2E) : Colors.black;
-    Color accentColor = isAdmin ? Colors.white : Colors.orange;
-    Color btnBgColor = isAdmin ? const Color(0xFF0EA5E9) : Colors.orange;
-    Color btnTextColor = isAdmin ? Colors.white : Colors.black;
+    final bool esAdmin = widget.rolDestino == 'Administrador';
+    final Color acento = esAdmin ? const Color(0xFF0284C7) : const Color(0xFFF59E0B);
 
     return Scaffold(
-      backgroundColor: bgColor,
+      backgroundColor: const Color(0xFF06111E),
       appBar: AppBar(
+        backgroundColor: const Color(0xFF0A192F),
+        elevation: 0,
         title: Text(
-          'ACCESO AL SISTEMA - ${widget.rolDestino.toUpperCase()}',
-          style: TextStyle(color: accentColor, fontWeight: FontWeight.bold, fontSize: 16),
+          'Acceso ${widget.rolDestino}',
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
         ),
-        backgroundColor: appBarColor,
-        iconTheme: IconThemeData(color: accentColor),
       ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 420),
-            padding: const EdgeInsets.all(32),
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: accentColor.withValues(alpha: 0.25), width: 1.5),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.35),
-                  blurRadius: 18,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          Image.network(
+            'https://images.unsplash.com/photo-1578575437130-527eed3abbec?auto=format&fit=crop&w=1920&q=80',
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+          ),
+          Container(
+            color: const Color(0xEB06111E),
+          ),
+          Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 430),
+                child: Container(
+                  padding: const EdgeInsets.all(32),
                   decoration: BoxDecoration(
-                    color: accentColor.withValues(alpha: 0.12),
-                    shape: BoxShape.circle,
+                    color: const Color(0xFF151F32).withValues(alpha: 0.95),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: acento.withValues(alpha: 0.5), width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.5),
+                        blurRadius: 24,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
                   ),
-                  child: Icon(
-                    isAdmin ? Icons.admin_panel_settings : Icons.precision_manufacturing,
-                    size: 56,
-                    color: accentColor,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        esAdmin ? Icons.admin_panel_settings : Icons.engineering,
+                        color: acento,
+                        size: 50,
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        esAdmin ? 'PANEL CENTRAL TOS' : 'CABINA GRÚA RTG-04',
+                        style: const TextStyle(
+                          fontSize: 21,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          letterSpacing: 1.1,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Autenticación requerida para ${widget.rolDestino}',
+                        style: const TextStyle(color: Colors.white60, fontSize: 13),
+                      ),
+                      const SizedBox(height: 26),
+                      TextField(
+                        controller: _userCtrl,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Usuario',
+                          labelStyle: const TextStyle(color: Colors.white70),
+                          prefixIcon: Icon(Icons.person, color: acento),
+                          filled: true,
+                          fillColor: const Color(0xFF0B1120),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: _passCtrl,
+                        obscureText: _ocultarClave,
+                        onSubmitted: (_) => _iniciarSesion(),
+                        style: const TextStyle(color: Colors.white),
+                        decoration: InputDecoration(
+                          labelText: 'Contraseña',
+                          labelStyle: const TextStyle(color: Colors.white70),
+                          prefixIcon: Icon(Icons.lock, color: acento),
+                          filled: true,
+                          fillColor: const Color(0xFF0B1120),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _ocultarClave ? Icons.visibility : Icons.visibility_off,
+                              color: Colors.white60,
+                            ),
+                            onPressed: () =>
+                                setState(() => _ocultarClave = !_ocultarClave),
+                          ),
+                        ),
+                      ),
+                      if (_errorMensaje != null) ...[
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.redAccent),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.error_outline,
+                                  color: Colors.redAccent, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _errorMensaje!,
+                                  style: const TextStyle(
+                                      color: Colors.redAccent, fontSize: 13),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 50,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: acento,
+                            foregroundColor:
+                                esAdmin ? Colors.white : const Color(0xFF0B1120),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          onPressed: _cargando ? null : _iniciarSesion,
+                          child: _cargando
+                              ? const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text(
+                                  'INGRESAR AL SISTEMA',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    letterSpacing: 0.8,
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  isAdmin ? 'Panel Logístico Central' : 'Terminal de Operador',
-                  style: TextStyle(color: accentColor, fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Ingresa tus credenciales institucionales',
-                  style: TextStyle(color: accentColor.withValues(alpha: 0.75), fontSize: 13),
-                ),
-                const SizedBox(height: 28),
-                TextField(
-                  controller: _userCtrl,
-                  style: TextStyle(color: accentColor),
-                  textInputAction: TextInputAction.next,
-                  decoration: InputDecoration(
-                    labelText: 'Usuario',
-                    labelStyle: TextStyle(color: accentColor.withValues(alpha: 0.85)),
-                    prefixIcon: Icon(Icons.person_outline, color: accentColor),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: accentColor.withValues(alpha: 0.5)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: accentColor, width: 2),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _passCtrl,
-                  obscureText: _ocultarClave,
-                  style: TextStyle(color: accentColor),
-                  onSubmitted: (_) => _ingresar(),
-                  decoration: InputDecoration(
-                    labelText: 'Contraseña',
-                    labelStyle: TextStyle(color: accentColor.withValues(alpha: 0.85)),
-                    prefixIcon: Icon(Icons.lock_outline, color: accentColor),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: accentColor.withValues(alpha: 0.5)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide(color: accentColor, width: 2),
-                    ),
-                    suffixIcon: IconButton(
-                      icon: Icon(_ocultarClave ? Icons.visibility : Icons.visibility_off, color: accentColor),
-                      onPressed: () => setState(() => _ocultarClave = !_ocultarClave),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 28),
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: btnBgColor,
-                      foregroundColor: btnTextColor,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    ),
-                    onPressed: _cargando ? null : _ingresar,
-                    child: _cargando
-                        ? SizedBox(
-                            height: 22,
-                            width: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2.5, color: btnTextColor),
-                          )
-                        : const Text('AUTENTICAR', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
-        ),
+        ],
       ),
     );
   }

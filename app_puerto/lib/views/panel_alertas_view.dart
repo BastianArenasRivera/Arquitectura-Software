@@ -48,7 +48,7 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
       );
       if (resAnual.statusCode == 200) {
         final data = jsonDecode(resAnual.body);
-        final anios = (data['anios_disponibles'] as List<dynamic>)
+        final anios = (data['anios_disponibles'] as List)
             .map((e) => e as int)
             .toList();
         _aniosDisponibles = {...anios, 2026, 2025, 2024}.toList()
@@ -60,13 +60,30 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
         Uri.parse('${ApiConfig.baseUrl}/api/reportes-dispositivos'),
       );
       if (resReportes.statusCode == 200) {
-        _reportesDispositivos = List.from(
-          jsonDecode(resReportes.body),
-        );
+        _reportesDispositivos = List.from(jsonDecode(resReportes.body));
       }
     } finally {
       if (mounted) setState(() => _cargando = false);
     }
+  }
+
+  Future<void> _marcarResuelto(int reporteId) async {
+    try {
+      final res = await http.put(
+        Uri.parse(
+          '${ApiConfig.baseUrl}/api/reportes-dispositivos/$reporteId/resolver',
+        ),
+      );
+      if (res.statusCode == 200 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Reporte marcado como resuelto'),
+            backgroundColor: Color(0xFF16A34A),
+          ),
+        );
+        _cargarPanel();
+      }
+    } catch (_) {}
   }
 
   @override
@@ -78,7 +95,7 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
 
     return Theme(
       data: ThemeData.light().copyWith(
-        scaffoldBackgroundColor: const Color(0xFFF4F6F8),
+        scaffoldBackgroundColor: const Color(0xFFF1F5F9),
         appBarTheme: const AppBarTheme(
           backgroundColor: Color(0xFF0A2540),
           foregroundColor: Colors.white,
@@ -87,7 +104,7 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
       child: Scaffold(
         appBar: AppBar(
           title: const Text(
-            'Panel de Alertas',
+            'Panel de Alertas y Analítica',
             style: TextStyle(fontWeight: FontWeight.bold),
           ),
           actions: [
@@ -110,7 +127,7 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey[300]!),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -127,7 +144,8 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
                                 ),
                               ),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 12),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFFF0F4F8),
                                   borderRadius: BorderRadius.circular(8),
@@ -150,20 +168,21 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
                                         color: Color(0xFF0A2540),
                                       ),
                                     ),
-                                    selectedItemBuilder: (context) => _aniosDisponibles
-                                        .map(
-                                          (anio) => Align(
-                                            alignment: Alignment.centerLeft,
-                                            child: Text(
-                                              'Año $anio',
-                                              style: const TextStyle(
-                                                color: Color(0xFF0A2540),
-                                                fontWeight: FontWeight.bold,
+                                    selectedItemBuilder: (context) =>
+                                        _aniosDisponibles
+                                            .map(
+                                              (anio) => Align(
+                                                alignment: Alignment.centerLeft,
+                                                child: Text(
+                                                  'Año $anio',
+                                                  style: const TextStyle(
+                                                    color: Color(0xFF0A2540),
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
                                               ),
-                                            ),
-                                          ),
-                                        )
-                                        .toList(),
+                                            )
+                                            .toList(),
                                     items: _aniosDisponibles
                                         .map(
                                           (anio) => DropdownMenuItem<int>(
@@ -180,7 +199,8 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
                                         .toList(),
                                     onChanged: (nuevoAnio) {
                                       if (nuevoAnio != null) {
-                                        setState(() => _anioSeleccionado = nuevoAnio);
+                                        setState(() =>
+                                            _anioSeleccionado = nuevoAnio);
                                         _cargarPanel();
                                       }
                                     },
@@ -192,15 +212,20 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
                           const SizedBox(height: 8),
                           const Row(
                             children: [
-                              Icon(Icons.square, size: 13, color: Colors.red),
+                              Icon(Icons.square,
+                                  size: 13, color: Color(0xFFDC2626)),
                               SizedBox(width: 4),
-                              Text('Grave', style: TextStyle(color: Colors.black87, fontSize: 12)),
+                              Text('Grave',
+                                  style: TextStyle(
+                                      color: Colors.black87, fontSize: 12)),
                               SizedBox(width: 16),
-                              Icon(Icons.square, size: 13, color: Colors.amber),
+                              Icon(Icons.square,
+                                  size: 13, color: Color(0xFFD97706)),
                               SizedBox(width: 4),
                               Text(
                                 'Levemente grave',
-                                style: TextStyle(color: Colors.black87, fontSize: 12),
+                                style: TextStyle(
+                                    color: Colors.black87, fontSize: 12),
                               ),
                             ],
                           ),
@@ -217,8 +242,10 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
                                 final int leves = item['leves'] as int;
                                 final int total = item['total'] as int;
                                 const double altoMax = 150.0;
-                                final double altoGrave = (graves / maxProblemasMes) * altoMax;
-                                final double altoLeve = (leves / maxProblemasMes) * altoMax;
+                                final double altoGrave =
+                                    (graves / maxProblemasMes) * altoMax;
+                                final double altoLeve =
+                                    (leves / maxProblemasMes) * altoMax;
 
                                 return Expanded(
                                   child: Column(
@@ -242,8 +269,9 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
                                               width: 24,
                                               height: altoGrave,
                                               decoration: const BoxDecoration(
-                                                color: Colors.red,
-                                                borderRadius: BorderRadius.vertical(
+                                                color: Color(0xFFDC2626),
+                                                borderRadius:
+                                                    BorderRadius.vertical(
                                                   top: Radius.circular(4),
                                                 ),
                                               ),
@@ -252,8 +280,9 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
                                               width: 24,
                                               height: altoLeve,
                                               decoration: BoxDecoration(
-                                                color: Colors.amber[700],
-                                                borderRadius: BorderRadius.vertical(
+                                                color: const Color(0xFFD97706),
+                                                borderRadius:
+                                                    BorderRadius.vertical(
                                                   top: altoGrave == 0
                                                       ? const Radius.circular(4)
                                                       : Radius.zero,
@@ -308,16 +337,16 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
         ? widget.alertasPatio
         : [
             {
-              'texto': 'Congestión Alta en sector Sur.',
-              'color': Colors.red[100],
+              'texto': 'Congestión Alta en Bloque A (Reefer).',
+              'color': const Color(0xFFFEE2E2),
               'icono': Icons.error,
-              'iconColor': Colors.red,
+              'iconColor': const Color(0xFFDC2626),
             },
             {
-              'texto': 'Grúa requiere mantenimiento preventivo',
-              'color': Colors.orange[100],
+              'texto': 'Grúa RTG-02 requiere mantenimiento preventivo',
+              'color': const Color(0xFFFEF3C7),
               'icono': Icons.warning,
-              'iconColor': Colors.orange,
+              'iconColor': const Color(0xFFD97706),
             },
           ];
 
@@ -326,7 +355,7 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[300]!),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -360,7 +389,7 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
           ),
           const Divider(height: 24),
           SizedBox(
-            height: 330,
+            height: 340,
             child: Scrollbar(
               controller: _patioScrollCtrl,
               thumbVisibility: true,
@@ -419,7 +448,7 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[300]!),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -429,7 +458,7 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
             children: [
               const Row(
                 children: [
-                  Icon(Icons.sensors_off, color: Colors.red),
+                  Icon(Icons.sensors_off, color: Color(0xFFDC2626)),
                   SizedBox(width: 8),
                   Text(
                     'Reportes de Dispositivos',
@@ -453,7 +482,7 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
           ),
           const Divider(height: 24),
           SizedBox(
-            height: 330,
+            height: 340,
             child: _reportesDispositivos.isEmpty
                 ? const Center(
                     child: Text(
@@ -474,18 +503,35 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
                       itemBuilder: (context, index) {
                         final rep = _reportesDispositivos[index];
                         final bool esGrave = rep['severidad'] == 'grave';
-                        final Color color = esGrave ? Colors.red : Colors.amber[800]!;
+                        final bool resuelto = rep['estado'] == 'resuelto';
+                        final Color color = resuelto
+                            ? const Color(0xFF16A34A)
+                            : esGrave
+                                ? const Color(0xFFDC2626)
+                                : const Color(0xFFD97706);
+
                         return Container(
                           margin: const EdgeInsets.only(bottom: 10),
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: esGrave ? Colors.red[50] : Colors.amber[50],
+                            color: resuelto
+                                ? const Color(0xFFF0FDF4)
+                                : esGrave
+                                    ? const Color(0xFFFEF2F2)
+                                    : const Color(0xFFFFFBEB),
                             borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: color.withValues(alpha: 0.4)),
+                            border:
+                                Border.all(color: color.withValues(alpha: 0.4)),
                           ),
                           child: Row(
                             children: [
-                              Icon(Icons.warning_rounded, color: color, size: 28),
+                              Icon(
+                                resuelto
+                                    ? Icons.check_circle
+                                    : Icons.warning_rounded,
+                                color: color,
+                                size: 28,
+                              ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
@@ -509,6 +555,19 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
                                   ],
                                 ),
                               ),
+                              if (!resuelto)
+                                TextButton(
+                                  onPressed: () =>
+                                      _marcarResuelto(rep['id'] as int),
+                                  child: const Text(
+                                    'Resolver',
+                                    style: TextStyle(
+                                      color: Color(0xFF0284C7),
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 10,
@@ -519,7 +578,11 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
                                   borderRadius: BorderRadius.circular(20),
                                 ),
                                 child: Text(
-                                  esGrave ? 'Grave' : 'Levemente grave',
+                                  resuelto
+                                      ? 'Resuelto'
+                                      : esGrave
+                                          ? 'Grave'
+                                          : 'Leve',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 11,
