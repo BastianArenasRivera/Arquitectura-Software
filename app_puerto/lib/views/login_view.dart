@@ -21,16 +21,6 @@ class _LoginViewState extends State<LoginView> {
   String? _errorMensaje;
 
   @override
-  void initState() {
-    super.initState();
-    if (widget.rolDestino == 'Administrador') {
-      _userCtrl.text = 'admin';
-    } else {
-      _userCtrl.text = 'joaquin';
-    }
-  }
-
-  @override
   void dispose() {
     _userCtrl.dispose();
     _passCtrl.dispose();
@@ -38,6 +28,16 @@ class _LoginViewState extends State<LoginView> {
   }
 
   Future<void> _iniciarSesion() async {
+    final usuario = _userCtrl.text.trim();
+    final password = _passCtrl.text;
+
+    if (usuario.isEmpty || password.isEmpty) {
+      setState(() {
+        _errorMensaje = 'Debes ingresar usuario y contraseña.';
+      });
+      return;
+    }
+
     setState(() {
       _cargando = true;
       _errorMensaje = null;
@@ -49,8 +49,8 @@ class _LoginViewState extends State<LoginView> {
             Uri.parse('${ApiConfig.baseUrl}/api/login'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
-              'usuario': _userCtrl.text.trim(),
-              'password': _passCtrl.text,
+              'usuario': usuario,
+              'password': password,
             }),
           )
           .timeout(const Duration(seconds: 5));
@@ -68,17 +68,24 @@ class _LoginViewState extends State<LoginView> {
             context,
             MaterialPageRoute(
               builder: (_) => TabletGruaView(
-                nombreOperador: data['nombre'] ?? 'Joaquín Contreras',
+                nombreOperador: data['nombre'] ?? usuario,
+                username: data['username'] ?? usuario,
               ),
             ),
           );
         }
+      } else if (res.statusCode == 403) {
+        final data = jsonDecode(res.body);
+        setState(() {
+          _errorMensaje = data['detail'] ??
+              'Licencia de terminal cancelada por reporte de robo.';
+        });
       } else {
         setState(() {
           _errorMensaje = 'Usuario o contraseña incorrectos.';
         });
       }
-    } catch (e) {
+    } catch (_) {
       setState(() {
         _errorMensaje = 'No se pudo conectar con FastAPI. Verifica el servidor.';
       });
@@ -90,7 +97,8 @@ class _LoginViewState extends State<LoginView> {
   @override
   Widget build(BuildContext context) {
     final bool esAdmin = widget.rolDestino == 'Administrador';
-    final Color acento = esAdmin ? const Color(0xFF0284C7) : const Color(0xFFF59E0B);
+    final Color acento =
+        esAdmin ? const Color(0xFF0284C7) : const Color(0xFFF59E0B);
 
     return Scaffold(
       backgroundColor: const Color(0xFF06111E),
@@ -123,7 +131,8 @@ class _LoginViewState extends State<LoginView> {
                   decoration: BoxDecoration(
                     color: const Color(0xFF151F32).withValues(alpha: 0.95),
                     borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: acento.withValues(alpha: 0.5), width: 1.5),
+                    border: Border.all(
+                        color: acento.withValues(alpha: 0.5), width: 1.5),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withValues(alpha: 0.5),
@@ -153,14 +162,19 @@ class _LoginViewState extends State<LoginView> {
                       const SizedBox(height: 6),
                       Text(
                         'Autenticación requerida para ${widget.rolDestino}',
-                        style: const TextStyle(color: Colors.white60, fontSize: 13),
+                        style: const TextStyle(
+                            color: Colors.white60, fontSize: 13),
                       ),
                       const SizedBox(height: 26),
                       TextField(
                         controller: _userCtrl,
+                        autocorrect: false,
+                        enableSuggestions: false,
                         style: const TextStyle(color: Colors.white),
                         decoration: InputDecoration(
                           labelText: 'Usuario',
+                          hintText: 'Ingresa tu usuario',
+                          hintStyle: const TextStyle(color: Colors.white30),
                           labelStyle: const TextStyle(color: Colors.white70),
                           prefixIcon: Icon(Icons.person, color: acento),
                           filled: true,
@@ -174,10 +188,14 @@ class _LoginViewState extends State<LoginView> {
                       TextField(
                         controller: _passCtrl,
                         obscureText: _ocultarClave,
+                        autocorrect: false,
+                        enableSuggestions: false,
                         onSubmitted: (_) => _iniciarSesion(),
                         style: const TextStyle(color: Colors.white),
                         decoration: InputDecoration(
                           labelText: 'Contraseña',
+                          hintText: 'Ingresa tu contraseña',
+                          hintStyle: const TextStyle(color: Colors.white30),
                           labelStyle: const TextStyle(color: Colors.white70),
                           prefixIcon: Icon(Icons.lock, color: acento),
                           filled: true,
@@ -187,7 +205,9 @@ class _LoginViewState extends State<LoginView> {
                           ),
                           suffixIcon: IconButton(
                             icon: Icon(
-                              _ocultarClave ? Icons.visibility : Icons.visibility_off,
+                              _ocultarClave
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
                               color: Colors.white60,
                             ),
                             onPressed: () =>
@@ -206,14 +226,16 @@ class _LoginViewState extends State<LoginView> {
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.error_outline,
-                                  color: Colors.redAccent, size: 18),
+                              const Icon(Icons.gpp_bad,
+                                  color: Colors.redAccent, size: 20),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
                                   _errorMensaje!,
                                   style: const TextStyle(
-                                      color: Colors.redAccent, fontSize: 13),
+                                      color: Colors.redAccent,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600),
                                 ),
                               ),
                             ],
@@ -227,8 +249,9 @@ class _LoginViewState extends State<LoginView> {
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: acento,
-                            foregroundColor:
-                                esAdmin ? Colors.white : const Color(0xFF0B1120),
+                            foregroundColor: esAdmin
+                                ? Colors.white
+                                : const Color(0xFF0B1120),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10),
                             ),

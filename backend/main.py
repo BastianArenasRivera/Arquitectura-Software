@@ -3,8 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 import psycopg2
-from influxdb_client import InfluxDBClient, Point, WritePrecision
-from influxdb_client.client.write_api import SYNCHRONOUS
 import jwt
 import datetime
 from passlib.context import CryptContext
@@ -21,6 +19,7 @@ app.add_middleware(
 SECRET_KEY = "clave_secreta_jwt"
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+
 def get_postgres_db():
     return psycopg2.connect(
         dbname="puertodb",
@@ -29,6 +28,7 @@ def get_postgres_db():
         host="puerto_postgres",
         port="5432",
     )
+
 
 def init_db():
     conn = get_postgres_db()
@@ -54,16 +54,31 @@ def init_db():
             username TEXT UNIQUE,
             password_hash TEXT,
             rol TEXT,
-            nombre TEXT
+            nombre TEXT,
+            equipo_asignado TEXT DEFAULT 'Sin asignar',
+            licencia_activa BOOLEAN DEFAULT TRUE,
+            motivo_bloqueo TEXT DEFAULT ''
         )
     """)
+    c.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS equipo_asignado TEXT DEFAULT 'Sin asignar';")
+    c.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS licencia_activa BOOLEAN DEFAULT TRUE;")
+    c.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS motivo_bloqueo TEXT DEFAULT '';")
+
     c.execute(
-        "INSERT INTO usuarios (username, password_hash, rol, nombre) VALUES (%s, %s, %s, %s) ON CONFLICT (username) DO NOTHING",
-        ("admin", pwd_context.hash("Admin123"), "Administrador", "Administrador Central"),
+        """
+        INSERT INTO usuarios (username, password_hash, rol, nombre, equipo_asignado, licencia_activa)
+        VALUES (%s, %s, %s, %s, %s, TRUE)
+        ON CONFLICT (username) DO NOTHING
+        """,
+        ("admin", pwd_context.hash("Admin123"), "Administrador", "Administrador Central", "Central TOS"),
     )
     c.execute(
-        "INSERT INTO usuarios (username, password_hash, rol, nombre) VALUES (%s, %s, %s, %s) ON CONFLICT (username) DO NOTHING",
-        ("joaquin", pwd_context.hash("Joaquin123"), "Tablet", "Joaquín Contreras"),
+        """
+        INSERT INTO usuarios (username, password_hash, rol, nombre, equipo_asignado, licencia_activa)
+        VALUES (%s, %s, %s, %s, %s, TRUE)
+        ON CONFLICT (username) DO NOTHING
+        """,
+        ("joaquin", pwd_context.hash("Joaquin123"), "Tablet", "Joaquín Contreras", "Grúa RTG-04"),
     )
 
     c.execute("""
@@ -83,14 +98,18 @@ def init_db():
     conn.commit()
     conn.close()
 
+
 init_db()
+
 
 class LoginModel(BaseModel):
     usuario: str
     password: str
 
+
 class RFIDModel(BaseModel):
     tag_rfid: str
+
 
 class AccesoCreate(BaseModel):
     patente: str
@@ -99,9 +118,24 @@ class AccesoCreate(BaseModel):
     contenedor: Optional[str] = "MSKU-482910"
     tramite: Optional[str] = "Ingreso"
 
+
 class PerfilAdminUpdate(BaseModel):
     usuario: str
     nueva_password: str
+
+
+class UsuarioCreate(BaseModel):
+    username: str
+    password: str
+    rol: str
+    nombre: str
+    equipo_asignado: Optional[str] = "Grúa RTG-05"
+
+
+class LicenciaUpdate(BaseModel):
+    licencia_activa: bool
+    motivo_bloqueo: Optional[str] = ""
+
 
 class ManiobraIn(BaseModel):
     grua_id: str
@@ -112,6 +146,7 @@ class ManiobraIn(BaseModel):
     duracion_seg: int
     origen_sync: Optional[str] = "Online"
 
+
 class ReporteDispositivoIn(BaseModel):
     registro_id: str
     dispositivo: str
@@ -120,6 +155,7 @@ class ReporteDispositivoIn(BaseModel):
     severidad: str
     descripcion: Optional[str] = ""
     fecha_registro: str
+
 
 @app.get("/api/estado-sistema")
 def estado_sistema():
@@ -140,15 +176,29 @@ def estado_sistema():
         "timestamp": datetime.datetime.utcnow().isoformat(),
     }
 
+
 @app.post("/api/login")
 def login(data: LoginModel):
     conn = get_postgres_db()
     c = conn.cursor()
-    c.execute("SELECT password_hash, rol, nombre FROM usuarios WHERE username = %s", (data.usuario,))
+    c.execute(
+        """
+        SELECT password_hash, rol, nombre, COALESCE(licencia_activa, TRUE), COALESCE(motivo_bloqueo, '')
+        FROM usuarios WHERE username = %s
+        """,
+        (data.usuario,),
+    )
     user = c.fetchone()
     conn.close()
 
     if user and pwd_context.verify(data.password, user[0]):
+        if not user[3]:
+            motivo = user[4] if user[4] else "Licencia de terminal cancelada por reporte de robo."
+            raise HTTPException(
+                status_code=403,
+                detail=f"ACCESO DENEGADO: {motivo} Contacte a Central TOS.",
+            )
+
         token = jwt.encode(
             {
                 "user": data.usuario,
@@ -158,8 +208,160 @@ def login(data: LoginModel):
             SECRET_KEY,
             algorithm="HS256",
         )
-        return {"token": token, "rol": user[1], "nombre": user[2]}
-    raise HTTPException(status_code=401, detail="Credenciales inválidas")
+        return {
+            "token": token,
+            "username": data.usuario,
+            "rol": user[1],
+            "nombre": user[2],
+        }
+    raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos.")
+
+
+@app.get("/api/usuarios")
+def listar_usuarios():
+    conn = get_postgres_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, username, rol, nombre, COALESCE(equipo_asignado, 'Sin asignar'),
+                       COALESCE(licencia_activa, TRUE), COALESCE(motivo_bloqueo, '')
+                FROM usuarios
+                ORDER BY id ASC;
+            """)
+            filas = cur.fetchall()
+        return [
+            {
+                "id": f[0],
+                "username": f[1],
+                "rol": f[2],
+                "nombre": f[3],
+                "equipo_asignado": f[4],
+                "licencia_activa": f[5],
+                "motivo_bloqueo": f[6],
+            }
+            for f in filas
+        ]
+    finally:
+        conn.close()
+
+
+@app.post("/api/usuarios")
+def crear_usuario(nuevo: UsuarioCreate):
+    username_limpio = nuevo.username.strip().lower()
+    if not username_limpio or not nuevo.password or not nuevo.nombre.strip():
+        raise HTTPException(status_code=400, detail="Todos los campos son obligatorios.")
+
+    conn = get_postgres_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM usuarios WHERE username = %s;", (username_limpio,))
+            if cur.fetchone():
+                raise HTTPException(status_code=400, detail="El nombre de usuario ya existe.")
+
+            cur.execute(
+                """
+                INSERT INTO usuarios (username, password_hash, rol, nombre, equipo_asignado, licencia_activa)
+                VALUES (%s, %s, %s, %s, %s, TRUE)
+                RETURNING id;
+                """,
+                (
+                    username_limpio,
+                    pwd_context.hash(nuevo.password),
+                    nuevo.rol,
+                    nuevo.nombre.strip(),
+                    nuevo.equipo_asignado or "Sin asignar",
+                ),
+            )
+            nuevo_id = cur.fetchone()[0]
+        conn.commit()
+        return {"id": nuevo_id, "mensaje": "Perfil de trabajador creado correctamente"}
+    finally:
+        conn.close()
+
+
+@app.put("/api/usuarios/{usuario_id}/licencia")
+def actualizar_licencia_usuario(usuario_id: int, datos: LicenciaUpdate):
+    conn = get_postgres_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT username, nombre, rol, equipo_asignado FROM usuarios WHERE id = %s;",
+                (usuario_id,),
+            )
+            usuario = cur.fetchone()
+            if not usuario:
+                raise HTTPException(status_code=404, detail="Trabajador no encontrado.")
+
+            if usuario[0] == "admin" and not datos.licencia_activa:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No se puede revocar la licencia del administrador principal.",
+                )
+
+            motivo = datos.motivo_bloqueo or (
+                "Tablet reportada como robada / extraviada" if not datos.licencia_activa else ""
+            )
+
+            cur.execute(
+                """
+                UPDATE usuarios
+                SET licencia_activa = %s, motivo_bloqueo = %s
+                WHERE id = %s;
+                """,
+                (datos.licencia_activa, motivo, usuario_id),
+            )
+
+            if not datos.licencia_activa:
+                crear_tabla_reportes(conn)
+                ahora = datetime.datetime.now()
+                reg_id = f"SEG-LIC-{usuario_id}-{int(ahora.timestamp())}"
+                cur.execute(
+                    """
+                    INSERT INTO reportes_dispositivos
+                    (registro_id, dispositivo, metrica, valor, severidad, descripcion, fecha_registro)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (registro_id) DO NOTHING;
+                    """,
+                    (
+                        reg_id,
+                        f"Tablet_{usuario[1].replace(' ', '_')}",
+                        "licencia_terminal",
+                        "REVOCADA_ROBO",
+                        "grave",
+                        f"Licencia cancelada por robo para {usuario[1]} ({usuario[3]})",
+                        ahora.strftime("%Y-%m-%d %H:%M:%S"),
+                    ),
+                )
+
+        conn.commit()
+        return {
+            "mensaje": "Licencia cancelada y terminal bloqueada"
+            if not datos.licencia_activa
+            else "Licencia reactivada correctamente"
+        }
+    finally:
+        conn.close()
+
+
+@app.get("/api/usuarios/{username}/estado-licencia")
+def estado_licencia_usuario(username: str):
+    conn = get_postgres_db()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT COALESCE(licencia_activa, TRUE), COALESCE(motivo_bloqueo, '')
+                FROM usuarios WHERE username = %s;
+                """,
+                (username,),
+            )
+            fila = cur.fetchone()
+        if not fila:
+            return {"licencia_activa": False, "motivo_bloqueo": "Usuario eliminado del sistema."}
+        return {"licencia_activa": fila[0], "motivo_bloqueo": fila[1]}
+    finally:
+        conn.close()
+
 
 @app.put("/api/admin/perfil")
 def actualizar_perfil_admin(datos: PerfilAdminUpdate):
@@ -167,13 +369,14 @@ def actualizar_perfil_admin(datos: PerfilAdminUpdate):
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "UPDATE usuarios SET username = %s, password_hash = %s WHERE rol = 'Administrador';",
+                "UPDATE usuarios SET username = %s, password_hash = %s WHERE rol = 'Administrador' AND id = 1;",
                 (datos.usuario, pwd_context.hash(datos.nueva_password)),
             )
         conn.commit()
         return {"mensaje": "Perfil actualizado correctamente"}
     finally:
         conn.close()
+
 
 @app.post("/api/rfid")
 def registrar_rfid(data: RFIDModel):
@@ -189,6 +392,7 @@ def registrar_rfid(data: RFIDModel):
         return {"id": nuevo_id, "patente": data.tag_rfid, "anden": "Andén B-4"}
     finally:
         conn.close()
+
 
 @app.post("/api/accesos")
 def crear_acceso(acceso: AccesoCreate):
@@ -215,6 +419,7 @@ def crear_acceso(acceso: AccesoCreate):
         }
     finally:
         conn.close()
+
 
 @app.get("/api/accesos")
 def listar_accesos():
@@ -246,6 +451,7 @@ def listar_accesos():
     finally:
         conn.close()
 
+
 @app.post("/api/maniobras")
 def registrar_maniobra(m: ManiobraIn):
     conn = get_postgres_db()
@@ -263,6 +469,7 @@ def registrar_maniobra(m: ManiobraIn):
         return {"id": nuevo_id, "mensaje": "Maniobra registrada"}
     finally:
         conn.close()
+
 
 @app.get("/api/maniobras")
 def listar_maniobras():
@@ -294,6 +501,7 @@ def listar_maniobras():
         ]
     finally:
         conn.close()
+
 
 def crear_tabla_reportes(conn):
     with conn.cursor() as cur:
@@ -344,6 +552,7 @@ def crear_tabla_reportes(conn):
             """, m)
     conn.commit()
 
+
 @app.post("/api/reportes-dispositivos")
 def crear_reporte_dispositivo(reporte: ReporteDispositivoIn):
     conn = get_postgres_db()
@@ -387,6 +596,7 @@ def crear_reporte_dispositivo(reporte: ReporteDispositivoIn):
     finally:
         conn.close()
 
+
 @app.put("/api/reportes-dispositivos/{reporte_id}/resolver")
 def resolver_reporte_dispositivo(reporte_id: int):
     conn = get_postgres_db()
@@ -401,6 +611,7 @@ def resolver_reporte_dispositivo(reporte_id: int):
         return {"mensaje": "Reporte marcado como resuelto"}
     finally:
         conn.close()
+
 
 @app.get("/api/reportes-dispositivos")
 def listar_reportes_dispositivos():
@@ -432,6 +643,7 @@ def listar_reportes_dispositivos():
         ]
     finally:
         conn.close()
+
 
 @app.get("/api/reportes-dispositivos/resumen-anual")
 def resumen_anual_reportes(anio: int = Query(default=2026)):

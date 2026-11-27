@@ -9,7 +9,13 @@ import '../config/api_config.dart';
 
 class TabletGruaView extends StatefulWidget {
   final String nombreOperador;
-  const TabletGruaView({super.key, this.nombreOperador = 'Joaquín Contreras'});
+  final String username;
+
+  const TabletGruaView({
+    super.key,
+    this.nombreOperador = 'Joaquín Contreras',
+    this.username = 'joaquin',
+  });
 
   @override
   State<TabletGruaView> createState() => _TabletGruaViewState();
@@ -20,6 +26,7 @@ class _TabletGruaViewState extends State<TabletGruaView> {
 
   bool _isOnline = true;
   bool _sincronizando = false;
+  bool _licenciaBloqueada = false;
   int _etapaManiobra = 0; // 0: Recogida, 1: Descarga en andén, 2: Completada
   int _indiceTarea = 0;
   DateTime _inicioManiobra = DateTime.now();
@@ -104,6 +111,8 @@ class _TabletGruaViewState extends State<TabletGruaView> {
   }
 
   Future<void> _verificarConexionReal() async {
+    if (_licenciaBloqueada) return;
+
     if (html.window.navigator.onLine == false) {
       _actualizarEstadoConexion(false);
       return;
@@ -113,10 +122,97 @@ class _TabletGruaViewState extends State<TabletGruaView> {
       final res = await http
           .get(Uri.parse('${ApiConfig.baseUrl}/api/estado-sistema'))
           .timeout(const Duration(seconds: 2));
-      _actualizarEstadoConexion(res.statusCode == 200);
+      if (res.statusCode == 200) {
+        _actualizarEstadoConexion(true);
+        await _verificarEstadoLicencia();
+      } else {
+        _actualizarEstadoConexion(false);
+      }
     } catch (_) {
       _actualizarEstadoConexion(false);
     }
+  }
+
+  Future<void> _verificarEstadoLicencia() async {
+    if (_licenciaBloqueada) return;
+    try {
+      final res = await http
+          .get(
+            Uri.parse(
+              '${ApiConfig.baseUrl}/api/usuarios/${widget.username}/estado-licencia',
+            ),
+          )
+          .timeout(const Duration(seconds: 2));
+
+      if (res.statusCode == 200 && mounted) {
+        final data = jsonDecode(res.body);
+        if (data['licencia_activa'] == false) {
+          _ejecutarBloqueoPorRobo(
+            data['motivo_bloqueo'] ??
+                'Licencia cancelada por Central TOS debido a reporte de robo.',
+          );
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _ejecutarBloqueoPorRobo(String motivo) {
+    if (_licenciaBloqueada || !mounted) return;
+    _heartbeatTimer?.cancel();
+    html.window.localStorage.remove(_storageKey);
+
+    setState(() {
+      _licenciaBloqueada = true;
+      _colaOffline.clear();
+    });
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1E1B1E),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+          side: const BorderSide(color: Colors.redAccent, width: 2),
+        ),
+        title: const Row(
+          children: [
+            Icon(Icons.gpp_bad, color: Colors.redAccent, size: 32),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'TERMINAL BLOQUEADA POR SEGURIDAD',
+                style: TextStyle(
+                  color: Colors.redAccent,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'La licencia de esta tablet fue revocada por el Administrador.\n\nMotivo: $motivo\n\nLos datos locales han sido eliminados y la sesión se cerrará.',
+          style: const TextStyle(color: Colors.white, fontSize: 14),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.pushAndRemoveUntil(
+                context,
+                MaterialPageRoute(builder: (_) => const SelectorView()),
+                (route) => false,
+              );
+            },
+            child: const Text('CERRAR TERMINAL'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _actualizarEstadoConexion(bool conectado) {
@@ -133,7 +229,7 @@ class _TabletGruaViewState extends State<TabletGruaView> {
   }
 
   Future<void> _sincronizarColaPendiente() async {
-    if (_sincronizando || _colaOffline.isEmpty) return;
+    if (_sincronizando || _colaOffline.isEmpty || _licenciaBloqueada) return;
     setState(() => _sincronizando = true);
 
     final int cantidad = _colaOffline.length;
@@ -176,6 +272,8 @@ class _TabletGruaViewState extends State<TabletGruaView> {
   }
 
   Future<void> _avanzarEtapaManiobra() async {
+    if (_licenciaBloqueada) return;
+
     if (_etapaManiobra == 0) {
       setState(() => _etapaManiobra = 1);
       return;
@@ -213,7 +311,8 @@ class _TabletGruaViewState extends State<TabletGruaView> {
           if (res.statusCode == 200 && mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Maniobra registrada en tiempo real en el servidor.'),
+                content:
+                    Text('Maniobra registrada en tiempo real en el servidor.'),
                 backgroundColor: Color(0xFF16A34A),
               ),
             );
@@ -222,7 +321,6 @@ class _TabletGruaViewState extends State<TabletGruaView> {
         } catch (_) {}
       }
 
-      // Si no hay conexión o falló el envío, guarda automáticamente en localStorage
       setState(() {
         _isOnline = false;
         _colaOffline.add(registroManiobra);
@@ -243,6 +341,7 @@ class _TabletGruaViewState extends State<TabletGruaView> {
   }
 
   void _siguienteAsignacion() {
+    if (_licenciaBloqueada) return;
     setState(() {
       _indiceTarea++;
       _etapaManiobra = 0;
@@ -276,7 +375,7 @@ class _TabletGruaViewState extends State<TabletGruaView> {
                       color: Colors.white),
                 ),
                 Text(
-                  'Operador: ${widget.nombreOperador} • Modo Cabina Nocturna',
+                  'Operador: ${widget.nombreOperador} (${widget.username}) • Modo Cabina Nocturna',
                   style: const TextStyle(fontSize: 11.5, color: Colors.white60),
                 ),
               ],
@@ -364,7 +463,6 @@ class _TabletGruaViewState extends State<TabletGruaView> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // PANEL IZQUIERDO: FICHA TÉCNICA DE CONTENEDOR Y RUTA
                   Expanded(
                     flex: 6,
                     child: Container(
@@ -484,7 +582,6 @@ class _TabletGruaViewState extends State<TabletGruaView> {
                     ),
                   ),
                   const SizedBox(width: 18),
-                  // PANEL DERECHO: FLUJO EN 3 ETAPAS + BOTÓN TÁCTIL
                   Expanded(
                     flex: 5,
                     child: Container(
