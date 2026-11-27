@@ -1,8 +1,4 @@
-import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'config/api_config.dart';
 import 'views/login_view.dart';
 import 'views/kiosko_view.dart';
 
@@ -22,58 +18,8 @@ class PuertoApp extends StatelessWidget {
   }
 }
 
-class SelectorView extends StatefulWidget {
+class SelectorView extends StatelessWidget {
   const SelectorView({super.key});
-
-  @override
-  State<SelectorView> createState() => _SelectorViewState();
-}
-
-class _SelectorViewState extends State<SelectorView> {
-  bool _apiOnline = false;
-  bool _pgOnline = false;
-  bool _influxOnline = false;
-  Timer? _statusTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    _verificarInfraestructura();
-    _statusTimer = Timer.periodic(
-      const Duration(seconds: 6),
-      (_) => _verificarInfraestructura(),
-    );
-  }
-
-  @override
-  void dispose() {
-    _statusTimer?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _verificarInfraestructura() async {
-    try {
-      final res = await http
-          .get(Uri.parse('${ApiConfig.baseUrl}/api/estado-sistema'))
-          .timeout(const Duration(seconds: 2));
-      if (res.statusCode == 200 && mounted) {
-        final data = jsonDecode(res.body);
-        setState(() {
-          _apiOnline = data['fastapi'] == true;
-          _pgOnline = data['postgres'] == true;
-          _influxOnline = data['influx'] == true;
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _apiOnline = false;
-          _pgOnline = false;
-          _influxOnline = false;
-        });
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -104,43 +50,25 @@ class _SelectorViewState extends State<SelectorView> {
             children: [
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
                 decoration: BoxDecoration(
                   color: const Color(0xFF0A192F).withValues(alpha: 0.9),
                   border: Border(
                     bottom: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
                   ),
                 ),
-                child: Wrap(
-                  alignment: WrapAlignment.spaceBetween,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 16,
-                  runSpacing: 8,
+                child: const Row(
                   children: [
-                    const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.directions_boat, color: Color(0xFF0284C7), size: 22),
-                        SizedBox(width: 10),
-                        Text(
-                          'SAN ANTONIO TERMINAL GATEWAY // TOS v4.2',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1.1,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 6,
-                      children: [
-                        _buildStatusPill('API FastAPI', _apiOnline),
-                        _buildStatusPill('PostgreSQL', _pgOnline),
-                        _buildStatusPill('Telemetría IoT', _influxOnline),
-                      ],
+                    Icon(Icons.directions_boat, color: Color(0xFF0284C7), size: 22),
+                    SizedBox(width: 10),
+                    Text(
+                      'SAN ANTONIO TERMINAL GATEWAY // TOS v4.2',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.1,
+                        fontSize: 13,
+                      ),
                     ),
                   ],
                 ),
@@ -259,37 +187,6 @@ class _SelectorViewState extends State<SelectorView> {
                 ),
               ),
             ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatusPill(String label, bool online) {
-    final Color color = online ? const Color(0xFF22C55E) : const Color(0xFFEF4444);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.45)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 6),
-          Text(
-            '$label: ${online ? "Online" : "Sin conexión"}',
-            style: TextStyle(
-              color: color,
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
-            ),
           ),
         ],
       ),
