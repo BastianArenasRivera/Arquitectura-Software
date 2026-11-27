@@ -1,3 +1,4 @@
+# Importación de librerías para API REST, validación, base de datos, JWT y encriptación
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -7,6 +8,7 @@ import jwt
 import datetime
 from passlib.context import CryptContext
 
+# Inicializa la aplicación FastAPI y habilita CORS para permitir peticiones desde Flutter Web
 app = FastAPI(title="API Puerto Logístico")
 app.add_middleware(
     CORSMiddleware,
@@ -16,10 +18,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Clave secreta para tokens JWT y contexto bcrypt para encriptar contraseñas
 SECRET_KEY = "clave_secreta_jwt"
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
+# Abre la conexión hacia el contenedor de PostgreSQL
 def get_postgres_db():
     return psycopg2.connect(
         dbname="puertodb",
@@ -30,9 +34,12 @@ def get_postgres_db():
     )
 
 
+# Crea las tablas necesarias al iniciar el servidor y carga usuarios base si no existen
 def init_db():
     conn = get_postgres_db()
     c = conn.cursor()
+
+    # Tabla de accesos vehiculares registrados por el Kiosko RFID
     c.execute("""
         CREATE TABLE IF NOT EXISTS accesos (
             id SERIAL PRIMARY KEY,
@@ -48,6 +55,7 @@ def init_db():
     c.execute("ALTER TABLE accesos ADD COLUMN IF NOT EXISTS contenedor TEXT DEFAULT 'MSKU-482910';")
     c.execute("ALTER TABLE accesos ADD COLUMN IF NOT EXISTS tramite TEXT DEFAULT 'Ingreso';")
 
+    # Tabla de usuarios con soporte para asignación de tablet y bloqueo por robo
     c.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             id SERIAL PRIMARY KEY,
@@ -64,6 +72,7 @@ def init_db():
     c.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS licencia_activa BOOLEAN DEFAULT TRUE;")
     c.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS motivo_bloqueo TEXT DEFAULT '';")
 
+    # Inserta el Administrador y el Operador Joaquín por defecto
     c.execute(
         """
         INSERT INTO usuarios (username, password_hash, rol, nombre, equipo_asignado, licencia_activa)
@@ -81,6 +90,7 @@ def init_db():
         ("joaquin", pwd_context.hash("Joaquin123"), "Tablet", "Joaquín Contreras", "Grúa RTG-04"),
     )
 
+    # Tabla de maniobras realizadas desde las tablets de grúa (online y sincronizadas offline)
     c.execute("""
         CREATE TABLE IF NOT EXISTS maniobras_grua (
             id SERIAL PRIMARY KEY,
@@ -102,6 +112,7 @@ def init_db():
 init_db()
 
 
+# Modelos Pydantic para validar los datos JSON recibidos en cada endpoint
 class LoginModel(BaseModel):
     usuario: str
     password: str
@@ -157,6 +168,7 @@ class ReporteDispositivoIn(BaseModel):
     fecha_registro: str
 
 
+# Endpoint de latido (heartbeat) usado por la tablet para detectar si hay conexión real
 @app.get("/api/estado-sistema")
 def estado_sistema():
     pg_ok = False
@@ -177,6 +189,7 @@ def estado_sistema():
     }
 
 
+# Valida usuario/contraseña y bloquea con error 403 si la licencia fue revocada por robo
 @app.post("/api/login")
 def login(data: LoginModel):
     conn = get_postgres_db()
@@ -217,6 +230,7 @@ def login(data: LoginModel):
     raise HTTPException(status_code=401, detail="Usuario o contraseña incorrectos.")
 
 
+# Lista todos los trabajadores registrados y el estado de su licencia
 @app.get("/api/usuarios")
 def listar_usuarios():
     conn = get_postgres_db()
@@ -245,6 +259,7 @@ def listar_usuarios():
         conn.close()
 
 
+# Crea un nuevo perfil de operador o administrador con contraseña encriptada
 @app.post("/api/usuarios")
 def crear_usuario(nuevo: UsuarioCreate):
     username_limpio = nuevo.username.strip().lower()
@@ -279,6 +294,7 @@ def crear_usuario(nuevo: UsuarioCreate):
         conn.close()
 
 
+# Cancela (bloquea por robo) o reactiva la licencia de un trabajador y registra alerta de seguridad
 @app.put("/api/usuarios/{usuario_id}/licencia")
 def actualizar_licencia_usuario(usuario_id: int, datos: LicenciaUpdate):
     conn = get_postgres_db()
@@ -311,6 +327,7 @@ def actualizar_licencia_usuario(usuario_id: int, datos: LicenciaUpdate):
                 (datos.licencia_activa, motivo, usuario_id),
             )
 
+            # Si se revoca la licencia, guarda un reporte grave en el historial de alertas
             if not datos.licencia_activa:
                 crear_tabla_reportes(conn)
                 ahora = datetime.datetime.now()
@@ -343,6 +360,7 @@ def actualizar_licencia_usuario(usuario_id: int, datos: LicenciaUpdate):
         conn.close()
 
 
+# Endpoint consultado cada 3 segundos por la tablet para expulsar al usuario si fue bloqueado
 @app.get("/api/usuarios/{username}/estado-licencia")
 def estado_licencia_usuario(username: str):
     conn = get_postgres_db()
@@ -363,6 +381,7 @@ def estado_licencia_usuario(username: str):
         conn.close()
 
 
+# Actualiza usuario y contraseña del Administrador principal
 @app.put("/api/admin/perfil")
 def actualizar_perfil_admin(datos: PerfilAdminUpdate):
     conn = get_postgres_db()
@@ -378,6 +397,7 @@ def actualizar_perfil_admin(datos: PerfilAdminUpdate):
         conn.close()
 
 
+# Registra una lectura rápida desde antena RFID
 @app.post("/api/rfid")
 def registrar_rfid(data: RFIDModel):
     conn = get_postgres_db()
@@ -394,6 +414,7 @@ def registrar_rfid(data: RFIDModel):
         conn.close()
 
 
+# Guarda un ingreso vehicular completo desde el Kiosko en PostgreSQL
 @app.post("/api/accesos")
 def crear_acceso(acceso: AccesoCreate):
     conn = get_postgres_db()
@@ -421,6 +442,7 @@ def crear_acceso(acceso: AccesoCreate):
         conn.close()
 
 
+# Obtiene los últimos 25 ingresos vehiculares para mostrarlos en el Dashboard
 @app.get("/api/accesos")
 def listar_accesos():
     conn = get_postgres_db()
@@ -452,6 +474,7 @@ def listar_accesos():
         conn.close()
 
 
+# Registra una maniobra completada o sincronizada desde la Tablet de Grúa
 @app.post("/api/maniobras")
 def registrar_maniobra(m: ManiobraIn):
     conn = get_postgres_db()
@@ -471,6 +494,7 @@ def registrar_maniobra(m: ManiobraIn):
         conn.close()
 
 
+# Lista las últimas 20 maniobras registradas
 @app.get("/api/maniobras")
 def listar_maniobras():
     conn = get_postgres_db()
@@ -503,6 +527,7 @@ def listar_maniobras():
         conn.close()
 
 
+# Crea la tabla de reportes de anomalías IoT y precarga datos históricos de ejemplo (2024-2026)
 def crear_tabla_reportes(conn):
     with conn.cursor() as cur:
         cur.execute("""
@@ -553,6 +578,7 @@ def crear_tabla_reportes(conn):
     conn.commit()
 
 
+# Guarda un reporte nuevo enviado desde el Visor de Telemetría evitando duplicados
 @app.post("/api/reportes-dispositivos")
 def crear_reporte_dispositivo(reporte: ReporteDispositivoIn):
     conn = get_postgres_db()
@@ -597,6 +623,7 @@ def crear_reporte_dispositivo(reporte: ReporteDispositivoIn):
         conn.close()
 
 
+# Marca un reporte como resuelto en PostgreSQL desde el Panel de Alertas
 @app.put("/api/reportes-dispositivos/{reporte_id}/resolver")
 def resolver_reporte_dispositivo(reporte_id: int):
     conn = get_postgres_db()
@@ -613,6 +640,7 @@ def resolver_reporte_dispositivo(reporte_id: int):
         conn.close()
 
 
+# Devuelve todos los reportes de dispositivos ordenados por fecha
 @app.get("/api/reportes-dispositivos")
 def listar_reportes_dispositivos():
     conn = get_postgres_db()
@@ -645,6 +673,7 @@ def listar_reportes_dispositivos():
         conn.close()
 
 
+# Agrupa por mes los problemas graves y leves de un año para el gráfico de barras
 @app.get("/api/reportes-dispositivos/resumen-anual")
 def resumen_anual_reportes(anio: int = Query(default=2026)):
     conn = get_postgres_db()

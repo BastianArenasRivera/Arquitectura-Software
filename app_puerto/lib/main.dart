@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'views/login_view.dart';
 import 'views/kiosko_view.dart';
 
+// Punto de entrada de la aplicación Flutter Web
 void main() => runApp(const PuertoApp());
 
+// Widget raíz que configura el tema general y la pantalla inicial
 class PuertoApp extends StatelessWidget {
   const PuertoApp({super.key});
 
@@ -18,6 +20,7 @@ class PuertoApp extends StatelessWidget {
   }
 }
 
+// Portada principal con fondo portuario nocturno y acceso a los 3 módulos del sistema
 class SelectorView extends StatelessWidget {
   const SelectorView({super.key});
 
@@ -28,11 +31,13 @@ class SelectorView extends StatelessWidget {
       body: Stack(
         fit: StackFit.expand,
         children: [
+          // Imagen panorámica de fondo de las grúas del puerto
           Image.network(
             'https://images.unsplash.com/photo-1578575437130-527eed3abbec?auto=format&fit=crop&w=1920&q=80',
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => const SizedBox.shrink(),
           ),
+          // Degradado oscuro para garantizar contraste sobre la fotografía
           Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
@@ -48,6 +53,7 @@ class SelectorView extends StatelessWidget {
           ),
           Column(
             children: [
+              // Barra superior institucional limpia
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
@@ -73,6 +79,7 @@ class SelectorView extends StatelessWidget {
                   ],
                 ),
               ),
+              // Tarjeta central con las 3 opciones operativas
               Expanded(
                 child: Center(
                   child: SingleChildScrollView(
@@ -99,6 +106,7 @@ class SelectorView extends StatelessWidget {
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            // Emblema circular del puerto
                             Container(
                               padding: const EdgeInsets.all(14),
                               decoration: BoxDecoration(
@@ -131,6 +139,7 @@ class SelectorView extends StatelessWidget {
                               textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: 28),
+                            // Acceso directo al Kiosko RFID sin contraseña
                             _buildModuloCard(
                               context: context,
                               titulo: 'Kiosko (Pórtico RFID)',
@@ -143,6 +152,7 @@ class SelectorView extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(height: 14),
+                            // Acceso al Login de Tablet de Operador
                             _buildModuloCard(
                               context: context,
                               titulo: 'Tablet (Operador Grúa)',
@@ -157,6 +167,7 @@ class SelectorView extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(height: 14),
+                            // Acceso al Login del Dashboard Administrativo
                             _buildModuloCard(
                               context: context,
                               titulo: 'Dashboard (Administrador)',
@@ -193,6 +204,7 @@ class SelectorView extends StatelessWidget {
     );
   }
 
+  // Tarjeta reutilizable para cada botón de módulo en la portada
   Widget _buildModuloCard({
     required BuildContext context,
     required String titulo,

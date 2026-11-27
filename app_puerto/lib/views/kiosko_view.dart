@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 
+// Interfaz del tótem de pórtico para simular lectura RFID y registrar camiones en PostgreSQL
 class KioskoLoaderView extends StatefulWidget {
   const KioskoLoaderView({super.key});
 
@@ -15,6 +16,7 @@ class _KioskoLoaderViewState extends State<KioskoLoaderView> {
   bool _procesando = false;
   Map? _ultimaLectura;
 
+  // Flota de camiones disponibles para simular el paso por el pórtico UHF
   final List _vehiculosSimulados = const [
     {
       'patente': 'ABCD-12',
@@ -46,6 +48,7 @@ class _KioskoLoaderViewState extends State<KioskoLoaderView> {
     },
   ];
 
+  // Envía los datos del vehículo seleccionado a FastAPI para guardarlo en PostgreSQL
   Future<void> _simularLecturaRfid() async {
     final vehiculo = _vehiculosSimulados[_vehiculoSeleccionado];
     setState(() => _procesando = true);
@@ -136,6 +139,7 @@ class _KioskoLoaderViewState extends State<KioskoLoaderView> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 22),
+                  // Selector de patentes disponibles para probar
                   Wrap(
                     spacing: 10,
                     runSpacing: 10,
@@ -160,6 +164,7 @@ class _KioskoLoaderViewState extends State<KioskoLoaderView> {
                     }),
                   ),
                   const SizedBox(height: 20),
+                  // Ficha con los datos del camión seleccionado
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -178,6 +183,7 @@ class _KioskoLoaderViewState extends State<KioskoLoaderView> {
                     ),
                   ),
                   const SizedBox(height: 22),
+                  // Botón de simulación de lectura RFID
                   SizedBox(
                     width: double.infinity,
                     height: 60,
@@ -202,6 +208,7 @@ class _KioskoLoaderViewState extends State<KioskoLoaderView> {
                       ),
                     ),
                   ),
+                  // Comprobante verde de autorización y andén asignado
                   if (_ultimaLectura != null) ...[
                     const SizedBox(height: 24),
                     Container(

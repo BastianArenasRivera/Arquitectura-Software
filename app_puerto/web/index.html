@@ -1,25 +1,35 @@
+<!-- Define el estándar HTML5 para el navegador -->
 <!DOCTYPE html>
+<!-- Establece el idioma principal de la aplicación en español -->
 <html lang="es">
 <head>
+  <!-- Ruta base dinámica que Flutter utiliza para resolver sus archivos internos -->
   <base href="$FLUTTER_BASE_HREF">
 
+  <!-- Codificación UTF-8 para mostrar correctamente tildes, eñes y símbolos -->
   <meta charset="UTF-8">
+  <!-- Fuerza el modo de renderizado más moderno disponible en el navegador -->
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <!-- Descripción general de la plataforma web -->
   <meta name="description" content="TOS - Terminal Logístico Portuario">
 
-  <!-- iOS meta tags & icons -->
+  <!-- Configuración para comportamiento tipo app nativa en dispositivos móviles (iOS/Android) -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="TOS - Terminal Logístico Portuario">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
-  <!-- Favicon de barco -->
+  <!-- Carga el ícono vectorial (SVG) del barco en la pestaña del navegador -->
   <link rel="icon" type="image/svg+xml" href="favicon.svg"/>
 
+  <!-- Título visible en la pestaña del navegador -->
   <title>TOS - Terminal Logístico Portuario</title>
+
+  <!-- Archivo de manifiesto con metadatos de instalación Web App (PWA) -->
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
+  <!-- Script principal que inicializa y monta la interfaz compilada de Flutter Web -->
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

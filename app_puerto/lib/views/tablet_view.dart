@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../main.dart';
 import '../config/api_config.dart';
 
+// Terminal embarcado en cabina de grúa con detección offline automática y revocación remota por robo
 class TabletGruaView extends StatefulWidget {
   final String nombreOperador;
   final String username;
@@ -37,6 +38,7 @@ class _TabletGruaViewState extends State<TabletGruaView> {
   StreamSubscription<html.Event>? _subOffline;
   Timer? _heartbeatTimer;
 
+  // Órdenes de maniobra asignadas al operador
   final List _tareasAsignadas = const [
     {
       'contenedor': 'MSKU 742918-0',
@@ -73,6 +75,7 @@ class _TabletGruaViewState extends State<TabletGruaView> {
     _cargarColaLocal();
     _isOnline = html.window.navigator.onLine ?? true;
 
+    // Escucha eventos nativos del navegador al desconectarse o reconectarse internet
     _subOffline = html.window.onOffline.listen((_) {
       _actualizarEstadoConexion(false);
     });
@@ -80,6 +83,7 @@ class _TabletGruaViewState extends State<TabletGruaView> {
       _verificarConexionReal();
     });
 
+    // Ejecuta un latido cada 3 segundos para validar conexión real y estado de licencia
     _verificarConexionReal();
     _heartbeatTimer = Timer.periodic(
       const Duration(seconds: 3),
@@ -95,6 +99,7 @@ class _TabletGruaViewState extends State<TabletGruaView> {
     super.dispose();
   }
 
+  // Lee maniobras pendientes guardadas en localStorage
   void _cargarColaLocal() {
     final guardado = html.window.localStorage[_storageKey];
     if (guardado != null && guardado.isNotEmpty) {
@@ -106,10 +111,12 @@ class _TabletGruaViewState extends State<TabletGruaView> {
     }
   }
 
+  // Persiste la cola offline en localStorage
   void _guardarColaLocal() {
     html.window.localStorage[_storageKey] = jsonEncode(_colaOffline);
   }
 
+  // Comprueba conectividad con FastAPI y consulta si la licencia sigue activa
   Future<void> _verificarConexionReal() async {
     if (_licenciaBloqueada) return;
 
@@ -133,6 +140,7 @@ class _TabletGruaViewState extends State<TabletGruaView> {
     }
   }
 
+  // Verifica en PostgreSQL si el administrador revocó la licencia de esta tablet por robo
   Future<void> _verificarEstadoLicencia() async {
     if (_licenciaBloqueada) return;
     try {
@@ -156,6 +164,7 @@ class _TabletGruaViewState extends State<TabletGruaView> {
     } catch (_) {}
   }
 
+  // Borra datos locales, bloquea la interfaz y cierra sesión inmediatamente
   void _ejecutarBloqueoPorRobo(String motivo) {
     if (_licenciaBloqueada || !mounted) return;
     _heartbeatTimer?.cancel();
@@ -215,6 +224,7 @@ class _TabletGruaViewState extends State<TabletGruaView> {
     );
   }
 
+  // Actualiza el indicador Online/Offline y dispara la sincronización al recuperar señal
   void _actualizarEstadoConexion(bool conectado) {
     if (!mounted) return;
     final bool estabaDesconectado = !_isOnline;
@@ -228,6 +238,7 @@ class _TabletGruaViewState extends State<TabletGruaView> {
     }
   }
 
+  // Envía a PostgreSQL todas las maniobras acumuladas durante el corte de internet
   Future<void> _sincronizarColaPendiente() async {
     if (_sincronizando || _colaOffline.isEmpty || _licenciaBloqueada) return;
     setState(() => _sincronizando = true);
@@ -271,6 +282,7 @@ class _TabletGruaViewState extends State<TabletGruaView> {
     }
   }
 
+  // Gestiona los 3 pasos de la maniobra y guarda local u online según conectividad
   Future<void> _avanzarEtapaManiobra() async {
     if (_licenciaBloqueada) return;
 
@@ -383,6 +395,7 @@ class _TabletGruaViewState extends State<TabletGruaView> {
           ],
         ),
         actions: [
+          // Indicador automático de estado de red (En línea / Modo Offline)
           Container(
             margin: const EdgeInsets.symmetric(vertical: 10),
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -430,6 +443,7 @@ class _TabletGruaViewState extends State<TabletGruaView> {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
+            // Banner de aviso cuando hay maniobras guardadas localmente sin enviar
             if (!_isOnline || _colaOffline.isNotEmpty)
               Container(
                 width: double.infinity,
@@ -463,6 +477,7 @@ class _TabletGruaViewState extends State<TabletGruaView> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  // Ficha izquierda con datos técnicos del contenedor asignado
                   Expanded(
                     flex: 6,
                     child: Container(
@@ -582,6 +597,7 @@ class _TabletGruaViewState extends State<TabletGruaView> {
                     ),
                   ),
                   const SizedBox(width: 18),
+                  // Panel derecho con las 3 etapas y el botón táctil de confirmación
                   Expanded(
                     flex: 5,
                     child: Container(

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 
+// Vista de monitoreo histórico IoT con filtros por fecha, dispositivo, estado y exportación CSV
 class InfluxDataView extends StatefulWidget {
   const InfluxDataView({super.key});
   @override
@@ -52,6 +53,7 @@ class _InfluxDataViewState extends State<InfluxDataView> {
     super.dispose();
   }
 
+  // Genera una serie histórica determinística (2024-2026) con lecturas normales, leves y graves
   void _generarHistorialBase() {
     final Random random = Random(42);
     final DateTime inicioBase = DateTime(2024, 1, 2, 8, 0);
@@ -132,6 +134,7 @@ class _InfluxDataViewState extends State<InfluxDataView> {
     _registrosHistoricos = generados.reversed.toList();
   }
 
+  // Consulta qué anomalías ya fueron reportadas para ocultar su ícono de advertencia
   Future<void> _cargarReportesExistentes() async {
     try {
       final res = await http.get(
@@ -153,6 +156,7 @@ class _InfluxDataViewState extends State<InfluxDataView> {
     return '$d/$m/${f.year}';
   }
 
+  // Abre el calendario para elegir la fecha inicial (Desde)
   Future<void> _seleccionarFechaDesde() async {
     final ahora = DateTime.now();
     final seleccionada = await showDatePicker(
@@ -180,6 +184,7 @@ class _InfluxDataViewState extends State<InfluxDataView> {
     }
   }
 
+  // Abre el calendario para elegir la fecha final (Hasta)
   Future<void> _seleccionarFechaHasta() async {
     final ahora = DateTime.now();
     final seleccionada = await showDatePicker(
@@ -207,6 +212,7 @@ class _InfluxDataViewState extends State<InfluxDataView> {
     }
   }
 
+  // Descarga en el navegador un archivo CSV con los registros filtrados en pantalla
   void _exportarCsv(List registros) {
     final buffer = StringBuffer();
     buffer.writeln('Timestamp,Dispositivo,Metrica,Valor,Severidad');
@@ -224,6 +230,7 @@ class _InfluxDataViewState extends State<InfluxDataView> {
     html.Url.revokeObjectUrl(url);
   }
 
+  // Envía una lectura anómala a PostgreSQL para mostrarla en el Panel de Alertas
   Future<void> _reportarAnomalia(Map reg) async {
     final String regId = reg['id'];
     if (_reportadosIds.contains(regId)) {
@@ -308,6 +315,7 @@ class _InfluxDataViewState extends State<InfluxDataView> {
     }
   }
 
+  // Filtra la lista según fechas Desde/Hasta, dispositivo y severidad
   List get _registrosFiltrados {
     return _registrosHistoricos.where((reg) {
       if (_dispositivoFiltro != 'Todos' &&
@@ -394,6 +402,7 @@ class _InfluxDataViewState extends State<InfluxDataView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Cabecera con título y contadores dinámicos por severidad
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -421,6 +430,7 @@ class _InfluxDataViewState extends State<InfluxDataView> {
                 ],
               ),
               const SizedBox(height: 12),
+              // Barra de filtros: Desde, Hasta, Dispositivo y Estado
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
@@ -434,7 +444,7 @@ class _InfluxDataViewState extends State<InfluxDataView> {
                   runSpacing: 12,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    // RECUADRO 1: DESDE
+                    // Recuadro de selección fecha inicial (Desde)
                     InkWell(
                       onTap: _seleccionarFechaDesde,
                       borderRadius: BorderRadius.circular(8),
@@ -464,7 +474,7 @@ class _InfluxDataViewState extends State<InfluxDataView> {
                         ),
                       ),
                     ),
-                    // RECUADRO 2: HASTA
+                    // Recuadro de selección fecha final (Hasta)
                     InkWell(
                       onTap: _seleccionarFechaHasta,
                       borderRadius: BorderRadius.circular(8),
@@ -505,6 +515,7 @@ class _InfluxDataViewState extends State<InfluxDataView> {
                         label: const Text('Limpiar fechas',
                             style: TextStyle(color: Color(0xFFDC2626))),
                       ),
+                    // Desplegable de filtro por sensor/dispositivo
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -569,6 +580,7 @@ class _InfluxDataViewState extends State<InfluxDataView> {
                         ),
                       ],
                     ),
+                    // Desplegable de filtro por severidad
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -636,6 +648,7 @@ class _InfluxDataViewState extends State<InfluxDataView> {
                 ),
               ),
               const SizedBox(height: 14),
+              // Tabla scrollable a ancho completo con botón de reporte en valores anómalos
               Expanded(
                 child: Container(
                   width: double.infinity,

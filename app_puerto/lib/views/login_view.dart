@@ -5,6 +5,7 @@ import '../config/api_config.dart';
 import 'dashboard_view.dart';
 import 'tablet_view.dart';
 
+// Vista de autenticación compartida para Tablet y Dashboard según el rolDestino
 class LoginView extends StatefulWidget {
   final String rolDestino;
   const LoginView({super.key, required this.rolDestino});
@@ -14,6 +15,7 @@ class LoginView extends StatefulWidget {
 }
 
 class _LoginViewState extends State<LoginView> {
+  // Controladores vacíos por seguridad (no precargan ningún usuario)
   final TextEditingController _userCtrl = TextEditingController();
   final TextEditingController _passCtrl = TextEditingController();
   bool _ocultarClave = true;
@@ -27,6 +29,7 @@ class _LoginViewState extends State<LoginView> {
     super.dispose();
   }
 
+  // Envía credenciales a FastAPI y redirige o muestra bloqueo por robo (HTTP 403)
   Future<void> _iniciarSesion() async {
     final usuario = _userCtrl.text.trim();
     final password = _passCtrl.text;
@@ -75,6 +78,7 @@ class _LoginViewState extends State<LoginView> {
           );
         }
       } else if (res.statusCode == 403) {
+        // Licencia revocada por robo de tablet
         final data = jsonDecode(res.body);
         setState(() {
           _errorMensaje = data['detail'] ??
@@ -118,9 +122,7 @@ class _LoginViewState extends State<LoginView> {
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) => const SizedBox.shrink(),
           ),
-          Container(
-            color: const Color(0xEB06111E),
-          ),
+          Container(color: const Color(0xEB06111E)),
           Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
@@ -166,6 +168,7 @@ class _LoginViewState extends State<LoginView> {
                             color: Colors.white60, fontSize: 13),
                       ),
                       const SizedBox(height: 26),
+                      // Campo de usuario sin sugerencias automáticas
                       TextField(
                         controller: _userCtrl,
                         autocorrect: false,
@@ -185,6 +188,7 @@ class _LoginViewState extends State<LoginView> {
                         ),
                       ),
                       const SizedBox(height: 16),
+                      // Campo de contraseña con botón para mostrar/ocultar
                       TextField(
                         controller: _passCtrl,
                         obscureText: _ocultarClave,
@@ -215,6 +219,7 @@ class _LoginViewState extends State<LoginView> {
                           ),
                         ),
                       ),
+                      // Recuadro rojo de alerta cuando fallan credenciales o la licencia está bloqueada
                       if (_errorMensaje != null) ...[
                         const SizedBox(height: 14),
                         Container(
@@ -243,6 +248,7 @@ class _LoginViewState extends State<LoginView> {
                         ),
                       ],
                       const SizedBox(height: 24),
+                      // Botón principal de ingreso
                       SizedBox(
                         width: double.infinity,
                         height: 50,

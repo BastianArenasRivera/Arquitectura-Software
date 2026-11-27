@@ -1,4 +1,3 @@
-// ignore: avoid_web_libraries_in_flutter, deprecated_member_use
 import 'dart:html' as html;
 import 'dart:typed_data';
 import 'dart:convert';
@@ -11,6 +10,7 @@ import '../config/api_config.dart';
 import 'influx_view.dart';
 import 'panel_alertas_view.dart';
 
+// Vista principal de administración con KPIs, alertas, cola de camiones y mapa de patio
 class DashboardAdminView extends StatefulWidget {
   const DashboardAdminView({super.key});
   @override
@@ -21,6 +21,7 @@ class _DashboardAdminViewState extends State<DashboardAdminView> {
   final ScrollController _alertasScrollCtrl = ScrollController();
   final ScrollController _camionesScrollCtrl = ScrollController();
 
+  // Lista inicial de alertas operativas en patio
   List alertas = [
     {
       'texto': 'Camión ABCD-12 asignado a Andén B-4',
@@ -36,6 +37,7 @@ class _DashboardAdminViewState extends State<DashboardAdminView> {
     },
   ];
 
+  // Registros base de camiones en andenes
   final List _colaBase = const [
     {
       'patente': 'ABCD-12',
@@ -80,6 +82,8 @@ class _DashboardAdminViewState extends State<DashboardAdminView> {
     colaCamiones = List.from(_colaBase);
     _inicializarMapaPatio();
     _cargarAccesosDesdeBackend();
+
+    // Simula nuevos eventos operativos cada 9 segundos
     _timer = Timer.periodic(const Duration(seconds: 9), (timer) {
       if (!mounted) return;
       final List nuevosEventos = [
@@ -108,6 +112,7 @@ class _DashboardAdminViewState extends State<DashboardAdminView> {
     });
   }
 
+  // Carga las 12 bahías del patio con sus porcentajes de ocupación y grúas asignadas
   void _inicializarMapaPatio() {
     bloquesPatio = [
       {
@@ -221,6 +226,7 @@ class _DashboardAdminViewState extends State<DashboardAdminView> {
     ];
   }
 
+  // Consulta PostgreSQL para traer los camiones registrados en el Kiosko RFID
   Future<void> _cargarAccesosDesdeBackend() async {
     try {
       final res = await http.get(Uri.parse('${ApiConfig.baseUrl}/api/accesos'));
@@ -258,6 +264,7 @@ class _DashboardAdminViewState extends State<DashboardAdminView> {
     super.dispose();
   }
 
+  // Abre una ventana blanca con el detalle técnico de la bahía seleccionada en el mapa
   void _mostrarDetalleCelda(Map celda) {
     final int oc = celda['ocupacion'] as int;
     final Color badgeColor = oc >= 85
@@ -342,6 +349,7 @@ class _DashboardAdminViewState extends State<DashboardAdminView> {
     );
   }
 
+  // Abre el centro de notificaciones para aprobar/rechazar colación o despachar cuadrilla
   void _abrirNotificaciones(BuildContext context) {
     showDialog(
       context: context,
@@ -493,6 +501,7 @@ class _DashboardAdminViewState extends State<DashboardAdminView> {
     );
   }
 
+  // Redistribuye carga en los bloques críticos (>85%) y notifica la optimización
   void _forzarOptimizacion() {
     setState(() {
       for (final b in bloquesPatio) {
@@ -576,6 +585,7 @@ class _DashboardAdminViewState extends State<DashboardAdminView> {
             ],
           ),
           actions: [
+            // Botón para abrir la gestión de trabajadores y cancelación de licencias por robo
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: ElevatedButton.icon(
@@ -614,11 +624,13 @@ class _DashboardAdminViewState extends State<DashboardAdminView> {
               ),
             ),
             const SizedBox(width: 8),
+            // Recarga los ingresos vehiculares desde PostgreSQL
             IconButton(
               tooltip: 'Actualizar datos',
               icon: const Icon(Icons.refresh, color: Colors.white),
               onPressed: _cargarAccesosDesdeBackend,
             ),
+            // Icono de notificaciones con contador de pendientes
             Stack(
               alignment: Alignment.center,
               children: [
@@ -650,6 +662,7 @@ class _DashboardAdminViewState extends State<DashboardAdminView> {
               ],
             ),
             const SizedBox(width: 12),
+            // Acceso al perfil personal del Administrador
             InkWell(
               onTap: () async {
                 await Navigator.push(
@@ -681,6 +694,7 @@ class _DashboardAdminViewState extends State<DashboardAdminView> {
               ),
             ),
             const SizedBox(width: 18),
+            // Cierra sesión y vuelve a la portada
             TextButton.icon(
               onPressed: () => Navigator.pushAndRemoveUntil(
                 context,
@@ -698,6 +712,7 @@ class _DashboardAdminViewState extends State<DashboardAdminView> {
           padding: const EdgeInsets.all(16.0),
           child: Column(
             children: [
+              // Fila superior de 4 tarjetas KPI operativas
               Row(
                 children: [
                   Expanded(
@@ -743,6 +758,7 @@ class _DashboardAdminViewState extends State<DashboardAdminView> {
                 ],
               ),
               const SizedBox(height: 14),
+              // Área principal dividida en columna izquierda (Alertas y Camiones) y derecha (Mapa de Patio)
               Expanded(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -751,6 +767,7 @@ class _DashboardAdminViewState extends State<DashboardAdminView> {
                       flex: 5,
                       child: Column(
                         children: [
+                          // Cuadro superior izquierdo: Panel de Alertas con enlace a analítica anual
                           Expanded(
                             flex: 5,
                             child: Container(
@@ -869,6 +886,7 @@ class _DashboardAdminViewState extends State<DashboardAdminView> {
                             ),
                           ),
                           const SizedBox(height: 12),
+                          // Cuadro inferior izquierdo: Cola en vivo de camiones y andenes
                           Expanded(
                             flex: 5,
                             child: Container(
@@ -993,6 +1011,7 @@ class _DashboardAdminViewState extends State<DashboardAdminView> {
                       ),
                     ),
                     const SizedBox(width: 14),
+                    // Columna derecha: Grilla interactiva de 12 bahías + botones de acción
                     Expanded(
                       flex: 7,
                       child: Column(
@@ -1161,6 +1180,7 @@ class _DashboardAdminViewState extends State<DashboardAdminView> {
                                     ),
                                   ),
                                   const SizedBox(height: 10),
+                                  // Franja inferior que representa el corredor de andenes
                                   Container(
                                     height: 42,
                                     decoration: BoxDecoration(
@@ -1192,6 +1212,7 @@ class _DashboardAdminViewState extends State<DashboardAdminView> {
                             ),
                           ),
                           const SizedBox(height: 12),
+                          // Botones inferiores hacia Visor IoT y Optimización de Grúas
                           Row(
                             children: [
                               Expanded(
@@ -1341,6 +1362,7 @@ class _DashboardAdminViewState extends State<DashboardAdminView> {
   }
 }
 
+// Pantalla administrativa para crear cuentas de trabajadores y revocar licencias por robo
 class GestionPersonalView extends StatefulWidget {
   final Function(String) onAlertaSeguridad;
   const GestionPersonalView({super.key, required this.onAlertaSeguridad});
@@ -1376,6 +1398,7 @@ class _GestionPersonalViewState extends State<GestionPersonalView> {
     super.dispose();
   }
 
+  // Consulta la lista de trabajadores desde PostgreSQL
   Future<void> _cargarUsuarios() async {
     setState(() => _cargandoLista = true);
     try {
@@ -1389,6 +1412,7 @@ class _GestionPersonalViewState extends State<GestionPersonalView> {
     if (mounted) setState(() => _cargandoLista = false);
   }
 
+  // Envía el formulario para crear un nuevo operador o supervisor
   Future<void> _crearTrabajador() async {
     if (_nombreCtrl.text.trim().isEmpty ||
         _userCtrl.text.trim().isEmpty ||
@@ -1453,6 +1477,7 @@ class _GestionPersonalViewState extends State<GestionPersonalView> {
     }
   }
 
+  // Solicita confirmación y revoca o reactiva la licencia de la tablet
   Future<void> _cambiarEstadoLicencia(Map user, bool activar) async {
     final motivoCtrl = TextEditingController(
       text: activar ? '' : 'Tablet reportada como robada / extraviada',
@@ -1600,7 +1625,7 @@ class _GestionPersonalViewState extends State<GestionPersonalView> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // COLUMNA IZQUIERDA: CREAR NUEVO TRABAJADOR
+              // Formulario izquierdo para registrar un nuevo trabajador
               Expanded(
                 flex: 4,
                 child: Container(
@@ -1783,7 +1808,7 @@ class _GestionPersonalViewState extends State<GestionPersonalView> {
                 ),
               ),
               const SizedBox(width: 18),
-              // COLUMNA DERECHA: LISTADO Y REVOCACIÓN DE LICENCIAS
+              // Listado derecho con estado de licencia y botón de cancelación por robo
               Expanded(
                 flex: 6,
                 child: Container(
@@ -1977,6 +2002,7 @@ class _GestionPersonalViewState extends State<GestionPersonalView> {
   }
 }
 
+// Pantalla de edición del perfil personal y foto del Administrador
 class PerfilAdminView extends StatefulWidget {
   static Uint8List? fotoBytes;
   static String nombreUsuarioActual = 'Admin';
@@ -2017,6 +2043,7 @@ class _PerfilAdminViewState extends State<PerfilAdminView> {
     super.dispose();
   }
 
+  // Abre el selector de archivos del navegador para subir una foto local
   void _subirFotoDesdeEquipo() {
     final uploadInput = html.FileUploadInputElement()..accept = 'image/*';
     uploadInput.click();
@@ -2036,6 +2063,7 @@ class _PerfilAdminViewState extends State<PerfilAdminView> {
     });
   }
 
+  // Valida que las contraseñas coincidan y guarda los cambios en PostgreSQL
   Future<void> _guardarCambios() async {
     final String usuario = _userCtrl.text.trim();
     final String nuevaPass = _passCtrl.text;

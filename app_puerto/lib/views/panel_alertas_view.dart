@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 
+// Vista de analítica anual de fallas y gestión de reportes de patio y dispositivos
 class PanelAlertasView extends StatefulWidget {
   final List alertasPatio;
   const PanelAlertasView({super.key, this.alertasPatio = const []});
@@ -38,6 +39,7 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
     super.dispose();
   }
 
+  // Obtiene desde FastAPI el resumen mensual por año y la lista de reportes registrados
   Future<void> _cargarPanel() async {
     setState(() => _cargando = true);
     try {
@@ -67,6 +69,7 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
     }
   }
 
+  // Marca un reporte como resuelto en PostgreSQL
   Future<void> _marcarResuelto(int reporteId) async {
     try {
       final res = await http.put(
@@ -122,6 +125,7 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // Tarjeta superior con gráfico de barras apiladas por mes y selector de año
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
@@ -317,6 +321,7 @@ class _PanelAlertasViewState extends State<PanelAlertasView> {
                       ),
                     ),
                     const SizedBox(height: 20),
+                    // Dos columnas inferiores: Alertas de Patio y Reportes de Dispositivos
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
